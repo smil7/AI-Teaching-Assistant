@@ -1,0 +1,900 @@
+﻿GloVe: Global Vectors for Word Representation
+
+Jeffrey Pennington, Richard Socher, Christopher D. Manning
+Computer Science Department, Stanford University, Stanford, CA 94305
+
+jpennin@stanford.edu, richard@socher.org, manning@stanford.edu
+
+Abstract the finer structure of the word vector space by ex-
+Recent methods for learning vector space amining not the scalar distance between word vec-
+representations of words have succeeded tors, but rather their various dimensions of dif-
+in capturing fine-grained semantic and ference. For example, the analogy “king is to
+syntactic regularities using vector arith- queen as man is to woman” should be encoded
+metic, but the origin of these regularities in the vector space by the vector equation king −
+
+has remained opaque. We analyze and queen = man − woman. This evaluation scheme
+make explicit the model properties needed favors models that produce dimensions of mean-
+for such regularities to emerge in word ing, thereby capturing the multi-clustering idea of
+vectors. The result is a new global log- distributed representations (Bengio, 2009).
+bilinear regression model that combines The two main model families for learning word
+the advantages of the two major model vectors are: 1) global matrix factorization meth-
+families in the literature: global matrix ods, such as latent semantic analysis (LSA) (Deer-
+factorization and local context window wester et al., 1990) and 2) local context window
+methods. Our model efficiently leverages methods, such as the skip-gram model of Mikolov
+statistical information by training only on et al. (2013c). Currently, both families suffer sig-
+the nonzero elements in a word-word co- nificant drawbacks. While methods like LSA ef-
+occurrence matrix, rather than on the en- ficiently leverage statistical information, they do
+tire sparse matrix or on individual context relatively poorly on the word analogy task, indi-
+windows in a large corpus. The model pro- cating a sub-optimal vector space structure. Meth-
+duces a vector space with meaningful sub- ods like skip-gram may do better on the analogy
+structure, as evidenced by its performance task, but they poorly utilize the statistics of the cor-
+of 75% on a recent word analogy task. It pus since they train on separate local context win-
+also outperforms related models on simi- dows instead of on global co-occurrence counts.
+larity tasks and named entity recognition. In this work, we analyze the model properties
+
+necessary to produce linear directions of meaning
+1 Introduction and argue that global log-bilinear regression mod-
+Semantic vector space models of language repre- els are appropriate for doing so. We propose a spe-
+sent each word with a real-valued vector. These cific weighted least squares model that trains on
+vectors can be used as features in a variety of ap- global word-word co-occurrence counts and thus
+plications, such as information retrieval (Manning makes efficient use of statistics. The model pro-
+et al., 2008), document classification (Sebastiani, duces a word vector space with meaningful sub-
+2002), question answering (Tellex et al., 2003), structure, as evidenced by its state-of-the-art per-
+named entity recognition (Turian et al., 2010), and formance of 75% accuracy on the word analogy
+parsing (Socher et al., 2013). dataset. We also demonstrate that our methods
+
+Most word vector methods rely on the distance outperform other current methods on several word
+or angle between pairs of word vectors as the pri- similarity tasks, and also on a common named en-
+mary method for evaluating the intrinsic quality tity recognition (NER) benchmark.
+of such a set of word representations. Recently, We provide the source code for the model as
+Mikolov et al. (2013c) introduced a new evalua- well as trained word vectors at http://nlp.
+tion scheme based on word analogies that probes stanford.edu/projects/glove/.
+
+
+
+2 Related Work the way for Collobert et al. (2011) to use the full
+context of a word for learning the word represen-
+
+Matrix Factorization Methods. Matrix factor- tations, rather than just the preceding context as is
+ization methods for generating low-dimensional the case with language models.
+word representations have roots stretching as far Recently, the importance of the full neural net-
+back as LSA. These methods utilize low-rank ap- work structure for learning useful word repre-
+proximations to decompose large matrices that sentations has been called into question. The
+capture statistical information about a corpus. The skip-gram and continuous bag-of-words (CBOW)
+particular type of information captured by such models of Mikolov et al. (2013a) propose a sim-
+matrices varies by application. In LSA, the ma- ple single-layer architecture based on the inner
+trices are of “term-document” type, i.e., the rows product between two word vectors. Mnih and
+correspond to words or terms, and the columns Kavukcuoglu (2013) also proposed closely-related
+correspond to different documents in the corpus. vector log-bilinear models, vLBL and ivLBL, and
+In contrast, the Hyperspace Analogue to Language Levy et al. (2014) proposed explicit word embed-
+(HAL) (Lund and Burgess, 1996), for example, dings based on a PPMI metric.
+utilizes matrices of “term-term” type, i.e., the rows In the skip-gram and ivLBL models, the objec-
+and columns correspond to words and the entries tive is to predict a word’s context given the word
+correspond to the number of times a given word itself, whereas the objective in the CBOW and
+occurs in the context of another given word. vLBL models is to predict a word given its con-
+
+A main problem with HAL and related meth- text. Through evaluation on a word analogy task,
+ods is that the most frequent words contribute a these models demonstrated the capacity to learn
+disproportionate amount to the similarity measure: linguistic patterns as linear relationships between
+the number of times two words co-occur with the the word vectors.
+or and, for example, will have a large effect on Unlike the matrix factorization methods, the
+their similarity despite conveying relatively little shallow window-based methods suffer from the
+about their semantic relatedness. A number of disadvantage that they do not operate directly on
+techniques exist that addresses this shortcoming of the co-occurrence statistics of the corpus. Instead,
+HAL, such as the COALS method (Rohde et al., these models scan context windows across the en-
+2006), in which the co-occurrence matrix is first tire corpus, which fails to take advantage of the
+transformed by an entropy- or correlation-based vast amount of repetition in the data.
+normalization. An advantage of this type of trans-
+formation is that the raw co-occurrence counts, 3 The GloVe Model
+which for a reasonably sized corpus might span
+8 or 9 orders of magnitude, are compressed so as The statistics of word occurrences in a corpus is
+to be distributed more evenly in a smaller inter- the primary source of information available to all
+val. A variety of newer models also pursue this unsupervised methods for learning word represen-
+approach, including a study (Bullinaria and Levy, tations, and although many such methods now ex-
+2007) that indicates that positive pointwise mu- ist, the question still remains as to how meaning
+tual information (PPMI) is a good transformation. is generated from these statistics, and how the re-
+More recently, a square root type transformation sulting word vectors might represent that meaning.
+in the form of Hellinger PCA (HPCA) (Lebret and In this section, we shed some light on this ques-
+Collobert, 2014) has been suggested as an effec- tion. We use our insights to construct a new model
+tive way of learning word representations. for word representation which we call GloVe, for
+
+Shallow Window-Based Methods. Another Global Vectors, because the global corpus statis-
+approach is to learn word representations that aid tics are captured directly by the model.
+in making predictions within local context win- First we establish some notation. Let the matrix
+dows. For example, Bengio et al. (2003) intro- of word-word co-occurrence counts be denoted by
+duced a model that learns word vector representa- ∑X , whose entries Xi j tabulate the number of times
+tions as part of a simple neural network architec- word j occurs in the context of word i. Let Xi =
+ture for language modeling. Collobert and Weston k Xik be the number of times any word appears
+(2008) decoupled the word vector training from in the context of word i. Finally, let Pi j = P( j |i) =
+the downstream training objectives, which paved Xi j/Xi be the probability that word j appear in the
+
+
+
+Table 1: Co-occurrence probabilities for target words ice and steam with selected context words from a 6
+billion token corpus. Only in the ratio does noise from non-discriminative words like water and fashion
+cancel out, so that large values (much greater than 1) correlate well with properties specific to ice, and
+small values (much less than 1) correlate well with properties specific of steam.
+
+Probability and Ratio k = solid k = gas k = water k = fashion
+P(k |ice) 1.9 × 10−4 6.6 × 10−5 3.0 × 10−3 1.7 × 10−5
+
+P(k |steam) 2.2 × 10−5 7.8 × 10−4 2.2 × 10−3 1.8 × 10−5
+
+P(k |ice)/P(k |steam) 8.9 8.5 × 10−2 1.36 0.96
+
+context of word i. the information present the ratio Pik/Pjk in the
+We begin with a simple example that showcases word vector space. Since vector spaces are inher-
+
+how certain aspects of meaning can be extracted ently linear structures, the most natural way to do
+directly from co-occurrence probabilities. Con- this is with vector differences. With this aim, we
+sider two words i and j that exhibit a particular as- can restrict our consideration to those functions F
+pect of interest; for concreteness, suppose we are that depend only on the difference of the two target
+interested in the concept of thermodynamic phase, words, modifying Eqn. (1) to,
+for which we might take i = ice and j = steam. P
+The relationship of these words can be examined F (wi − w j , w̃k ) ik
+
+= . (2)
+by studying the ratio of their co-occurrence prob- Pjk
+
+abilities with various probe words, k. For words Next, we note that the arguments of F in Eqn. (2)
+k related to ice but not steam, say k = solid, we are vectors while the right-hand side is a scalar.
+expect the ratio Pik/Pjk will be large. Similarly, While F could be taken to be a complicated func-
+for words k related to steam but not ice, say k = tion parameterized by, e.g., a neural network, do-
+gas, the ratio should be small. For words k like ing so would obfuscate the linear structure we are
+water or fashion, that are either related to both ice trying to capture. To avoid this issue, we can first
+and steam, or to neither, the ratio should be close take the dot pr(oduct of the arg)uments,
+to one. Table 1 shows these probabilities and their P
+ratios for a large corpus, and the numbers confirm F ( ik
+
+wi − w j )T w̃k = , (3)
+these expectations. Compared to the raw probabil- Pjk
+
+ities, the ratio is better able to distinguish relevant which prevents F from mixing the vector dimen-
+words (solid and gas) from irrelevant words (water sions in undesirable ways. Next, note that for
+and fashion) and it is also better able to discrimi- word-word co-occurrence matrices, the distinction
+nate between the two relevant words. between a word and a context word is arbitrary and
+
+The above argument suggests that the appropri- that we are free to exchange the two roles. To do so
+ate starting point for word vector learning should consistently, we must not only exchange w ↔ w̃
+be with ratios of co-occurrence probabilities rather but also X ↔ XT . Our final model should be in-
+than the probabilities themselves. Noting that the variant under this relabeling, but Eqn. (3) is not.
+ratio Pik/Pjk depends on three words i, j, and k, However, the symmetry can be restored in two
+the most general model takes the form, steps. First, we require that F be a homomorphism
+
+P between th(e groups (R,+) )and (R>0,× ), i.e.,
+F (wi ,w j , w̃k ) ik
+
+= , (1)
+Pjk F (wT w̃
+
+(w i k )
+F i − w j )T w̃k = , (4)
+
+where w ∈ Rd are word vectors and w̃ ∈ Rd F (wT
+j w̃k )
+
+are separate context word vectors whose role will which, by Eqn. (3), is solved by,
+be discussed in Section 4.2. In this equation, the
+right-hand side is extracted from the corpus, and X
+
+F ( i
+wT
+
+F may depend on some as-of-yet unspecified pa- i w̃k ) = P k
+ik = . (5)
+
+Xi
+
+rameters. The number of possibilities for F is vast, The solution to Eqn. (4) is F = exp, or,
+but by enforcing a few desiderata we can select a
+unique choice. First, we would like F to encode wT
+
+i w̃k = log(Pik ) = log(Xik ) − log(Xi ) . (6)
+
+
+
+Next, we note that Eqn. (6) would exhibit the ex- 1.0
+
+change symmetry if not for the log(Xi ) on the 0.8
+
+right-hand side. However, this term is indepen- 0.6
+
+dent of k so it can be absorbed into a bias bi for 0.4
+wi . Finally, adding an additional bias b̃k for w̃k 0.2
+restores the symmetry, 0.0
+
+wT
+i w̃k + bi + b̃k = log(Xik ) . (7)
+
+Figure 1: Weighting function f with α = 3/4.
+Eqn. (7) is a drastic simplification over Eqn. (1),
+
+but it is actually ill-defined since the logarithm di- The performance of the model depends weakly on
+verges whenever its argument is zero. One reso- the cutoff, which we fix to xmax = 100 for all our
+lution to this issue is to include an additive shift experiments. We found that α = 3/4 gives a mod-
+in the logarithm, log(Xik ) → log(1 + Xik ), which est improvement over a linear version with α = 1.
+maintains the sparsity of X while avoiding the di- Although we offer only empirical motivation for
+vergences. The idea of factorizing the log of the choosing the value 3/4, it is interesting that a sim-
+co-occurrence matrix is closely related to LSA and ilar fractional power scaling was found to give the
+we will use the resulting model as a baseline in best performance in (Mikolov et al., 2013a).
+our experiments. A main drawback to this model
+is that it weighs all co-occurrences equally, even 3.1 Relationship to Other Models
+those that happen rarely or never. Such rare co- Because all unsupervised methods for learning
+occurrences are noisy and carry less information word vectors are ultimately based on the occur-
+than the more frequent ones — yet even just the rence statistics of a corpus, there should be com-
+zero entries account for 75–95% of the data in X , monalities between the models. Nevertheless, cer-
+depending on the vocabulary size and corpus. tain models remain somewhat opaque in this re-
+
+We propose a new weighted least squares re- gard, particularly the recent window-based meth-
+gression model that addresses these problems. ods like skip-gram and ivLBL. Therefore, in this
+Casting Eqn. (7) as a least squares problem and subsection we show how these models are related
+introducing a weighting function f (Xi j ) into the to our proposed model, as defined in Eqn. (8).
+cost function gives us the model The starting point for the skip-gram or ivLBL
+
+∑ methods is a model Qi j for the probability that
+V ( ) ( )2
+
+J f X T
+i j wi w̃ j + bi + b̃j − log X word j appears in the context of word i. For con-
+
+= i j ,
+creteness, let us assume that Qi j is a softmax,
+
+i, j=1
+(8)
+
+where V is the size of the vocabulary. The weight- Qi j = ∑ exp(wT
+i w̃ j )
+
+. (10)
+ing function should obey the following properties: V
+
+k exp(wT
+=1 i w̃k )
+
+1. f (0) = 0. If f is viewed as a continuous Most of the details of these models are irrelevant
+function, it should vanish as x → 0 fast for our purposes, aside from the the fact that they
+enough that the limx→0 f (x) log2 x is finite. attempt to maximize the log probability as a con-
+
+2. f (x) should be non-decreasing so that rare text window scans over the corpus. Training pro-
+co-occurrences are not overweighted. ceeds in an on-line, stochastic fashion, but the im-
+
+plied global objective f∑unction can be written as,
+3. f (x) should be relatively small for large val-
+
+ues of x, so that frequent co-occurrences are J = − log Qi j . (11)
+not overweighted. i∈corpus
+
+j∈context(i)
+
+Of course a large number of functions satisfy these
+properties, but one class of functions that we found Evaluating the normalization factor of the soft-
+to work well ca{n be parameterized as, max for each term in this sum is costly. To al-
+
+low for efficient training, the skip-gram and ivLBL
+(x/xmax)α if x < x models introduce approximations to Qi j . How-
+
+f (x) max
+= (9)
+
+1 otherwise . ever, the sum in Eqn. (11) can be evaluated much
+
+
+
+more efficiently if we first group together those squared error of∑the log(arithms of P̂ and Q̂) instead,
+terms that have the same values for i and j,
+
+∑ Ĵ
+V ∑V ∑ Xi log P̂ 2
+
+= i j − log Q̂i j
+i, j
+
+J = − X (
+i j log Qi j , (12) = X T )2
+
+i wi w̃ j − log Xi j . (15)
+i=1 j=1 i, j
+
+where we have used the fact that the number of Finally, we observe that while the weighting factor
+like terms is given by the co-occurrenc∑e matrix X . Xi is preordained by the on-line training method
+
+Recalling our notation for Xi = k Xik and inherent to the skip-gram and ivLBL models, it is
+Pi j = Xi j/Xi , we can rewrite J as, by no means guaranteed to be optimal. In fact,
+
+∑ Mikolov et al. (2013a) observe that performance
+V ∑V ∑V can be increased by filtering the data so as to re-
+
+J = − Xi Pi j log Qi j = XiH (Pi ,Qi ) , duce the effective value of the weighting factor for
+i=1 j=1 i=1 frequent words. With this in mind, we introduce
+
+(13) a more general weighting function, which we are
+where H (Pi ,Qi ) is the cross entropy of the dis- free to take to depend on the context word as well.
+tributions Pi and Qi , which we define in analogy The result∑is,
+to Xi . As a weighted sum of cross-entropy error, (
+this objective bears some formal resemblance to Ĵ = f (X T )
+
+i j )
+2
+
+wi w̃ j − log Xi j , (16)
+the weighted least squares objective of Eqn. (8). i, j
+
+In fact, it is possible to optimize Eqn. (13) directly
+as opposed to the on-line training methods used in which is equivalent1 to the cost function of
+the skip-gram and ivLBL models. One could inter- Eqn. (8), which we derived previously.
+pret this objective as a “global skip-gram” model, 3.2 Complexity of the model
+and it might be interesting to investigate further.
+
+As can be seen from Eqn. (8) and the explicit form
+On the other hand, Eqn. (13) exhibits a number of
+
+of the weighting function f (X ), the computational
+undesirable properties that ought to be addressed
+
+complexity of the model depends on the number of
+before adopting it as a model for learning word
+
+nonzero elements in the matrix X . As this num-
+vectors.
+
+ber is always less than the total number of en-
+To begin, cross entropy error is just one among tries of the matrix, the model scales no worse than
+
+many possible distance measures between prob-
+O( |V |2). At first glance this might seem like a sub-
+
+ability distributions, and it has the unfortunate stantial improvement over the shallow window-
+property that distributions with long tails are of- based approaches, which scale with the corpus
+ten modeled poorly with too much weight given size, |C |. However, typical vocabularies have hun-
+to the unlikely events. Furthermore, for the mea- dreds of thousands of words, so that |V |2 can be in
+sure to be bounded it requires that the model dis- the hundreds of billions, which is actually much
+tribution Q be properly normalized. This presents larger than most corpora. For this reason it is im-
+a computational bottleneck owing to the sum over portant to determine whether a tighter bound can
+the whole vocabulary in Eqn. (10), and it would be be placed on the number of nonzero elements of
+desirable to consider a different distance measure X .
+that did not require this property of Q. A natural In order to make any concrete statements about
+choice would be a least squares objective in which the number of nonzero elements in X , it is neces-
+normalization fac∑tors in(Q and P a)re discarded, sary to make some assumptions about the distribu-
+
+tion of word co-occurrences. In particular, we will
+Ĵ = Xi P̂ 2
+
+i j − Q̂i j (14) assume that the number of co-occurrences of word
+i, j
+
+i with word j, Xi j , can be modeled as a power-law
+where P̂ function of the frequency rank of that word pair,
+
+i j = Xi j and Q̂i j = exp(wT
+i w̃ j ) are the
+
+unnormalized distributions. At this stage another ri j :
+k
+
+problem emerges, namely that Xi j often takes very Xi j = . (17)
+(ri j )αlarge values, which can complicate the optimiza-
+
+tion. An effective remedy is to minimize the 1We could also include bias terms in Eqn. (16).
+
+
+
+The total number of words in the corpus is pro- Table 2: Results on the word analogy task, given
+portional to the sum over all elements of the co- as percent accuracy. Underlined scores are best
+occurrence matrix X ,
+
+∑ ∑ within groups of similarly-sized models; bold
+|X | k scores are best overall. HPCA vectors are publicly
+
+|C | ∼ Xi j = = kH
+rα |X |,α , (18) available2; (i)vLBL results are from (Mnih et al.,
+
+i j r=1 2013); skip-gram (SG) and CBOW results are
+
+where we have rewritten the last sum in terms of from (Mikolov et al., 2013a,b); we trained SG†
+
+the generalized harmonic number Hn,m . The up- and CBOW† using the word2vec tool3. See text
+
+per limit of the sum, |X |, is the maximum fre- for details and a description of the SVD models.
+
+quency rank, which coincides with the number of Model Dim. Size Sem. Syn. Tot.
+nonzero elements in the matrix X . This number is ivLBL 100 1.5B 55.9 50.1 53.2
+also equal to the maximum value of r in Eqn. (17) HPCA 100 1.6B 4.2 16.4 10.8
+such that Xi j ≥ 1, i.e., |X | = k1/α . Therefore we GloVe 100 1.6B 67.5 54.3 60.3
+can write Eqn. (18) as, SG 300 1B 61 61 61
+
+CBOW 300 1.6B 16.1 52.6 36.1
+|C | ∼ |X |α H|X |,α . (19) vLBL 300 1.5B 54.2 64.8 60.0
+
+ivLBL 300 1.5B 65.2 63.0 64.0
+We are interested in how |X | is related to |C | when GloVe 300 1.6B 80.8 61.5 70.3
+both numbers are large; therefore we are free to
+
+SVD 300 6B 6.3 8.1 7.3
+expand the right hand side of the equation for large
+
+SVD-S 300 6B 36.7 46.6 42.1
+|X |. For this purpose we use the expansion of gen-
+
+SVD-L 300 6B 56.6 63.0 60.1
+eralized harmonic numbers (Apostol, 1976),
+
+CBOW† 300 6B 63.6 67.4 65.7
+SG†x1−s 300 6B 73.0 66.0 69.1
+
+Hx,s = + ζ (s) + O(x−s ) if s > 0, s , 1 ,
+1 − s GloVe 300 6B 77.4 67.0 71.7
+
+(20) CBOW 1000 6B 57.3 68.9 63.7
+giving, SG 1000 6B 66.1 65.1 65.6
+
+SVD-L 300 42B 38.4 58.2 49.2
+|X |
+
+|C | ∼ + ζ (α) |X |α + O(1) , (21) GloVe 300 42B 81.9 69.3 75.0
+1 − α
+
+where ζ (s) is the Riemann zeta function. In the dataset for NER (Tjong Kim Sang and De Meul-
+limit that X is large, only one of the two terms on der, 2003).
+the right hand side of Eqn. (21) will be relevant, Word analogies. The word analogy task con-
+and which term{that is depends on whether α > 1, sists of questions like, “a is to b as c is to ?”
+
+The dataset contains 19,544 such questions, di-
+O(|C |) if α < 1,
+
+|X | = (
+O(|C |1/α
+
+22) vided into a semantic subset and a syntactic sub-
+) if α > 1. set. The semantic questions are typically analogies
+
+For the corpora studied in this article, we observe about people or places, like “Athens is to Greece
+that Xi j is well-modeled by Eqn. (17) with α = as Berlin is to ?”. The syntactic questions are
+1.25. In this case we have that |X | = O(|C |0.8). typically analogies about verb tenses or forms of
+Therefore we conclude that the complexity of the adjectives, for example “dance is to dancing as fly
+model is much better than the worst case O(V 2), is to ?”. To correctly answer the question, the
+and in fact it does somewhat better than the on-line model should uniquely identify the missing term,
+window-based methods which scale like O(|C |). with only an exact correspondence counted as a
+
+correct match. We answer the question “a is to b
+4 Experiments as c is to ?” by finding the word d whose repre-
+
+4.1 Evaluation methods sentation wd is closest to wb − wa + wc according
+to the cosine similarity.4
+
+We conduct experiments on the word analogy
+2
+
+task of Mikolov et al. (2013a), a variety of word http://lebret.ch/words/
+3http://code.google.com/p/word2vec/
+
+similarity tasks, as described in (Luong et al., 4Levy et al. (2014) introduce a multiplicative analogy
+2013), and on the CoNLL-2003 shared benchmark evaluation, 3COSMUL, and report an accuracy of 68.24% on
+
+
+
+80 70  70  
+
+70 65 65
+
+60 60 60
+
+50 55 55
+
+40 50 50
+Semantic Semantic Semantic
+
+30 Syntactic 45 Syntactic
+Overall 45 Syntactic
+
+Overall Overall
+
+200 
+40    
+
+100 200 300 400 500 600 2 4 6 8 10 402 4 6 8 10
+Vector Dimension Window Size Window Size
+
+(a) Symmetric context (b) Symmetric context (c) Asymmetric context
+
+Figure 2: Accuracy on the analogy task as function of vector size and window size/type. All models are
+trained on the 6 billion token corpus. In (a), the window size is 10. In (b) and (c), the vector size is 100.
+
+Word similarity. While the analogy task is our has 6 billion tokens; and on 42 billion tokens of
+primary focus since it tests for interesting vector web data, from Common Crawl5. We tokenize
+space substructures, we also evaluate our model on and lowercase each corpus with the Stanford to-
+a variety of word similarity tasks in Table 3. These kenizer, build a vocabulary of the 400,000 most
+include WordSim-353 (Finkelstein et al., 2001), frequent words6, and then construct a matrix of co-
+MC (Miller and Charles, 1991), RG (Rubenstein occurrence counts X . In constructing X , we must
+and Goodenough, 1965), SCWS (Huang et al., choose how large the context window should be
+2012), and RW (Luong et al., 2013). and whether to distinguish left context from right
+Named entity recognition. The CoNLL-2003 context. We explore the effect of these choices be-
+English benchmark dataset for NER is a collec- low. In all cases we use a decreasing weighting
+tion of documents from Reuters newswire articles, function, so that word pairs that are d words apart
+annotated with four entity types: person, location, contribute 1/d to the total count. This is one way
+organization, and miscellaneous. We train mod- to account for the fact that very distant word pairs
+els on CoNLL-03 training data on test on three are expected to contain less relevant information
+datasets: 1) ConLL-03 testing data, 2) ACE Phase about the words’ relationship to one another.
+2 (2001-02) and ACE-2003 data, and 3) MUC7 For all our experiments, we set xmax = 100,
+Formal Run test set. We adopt the BIO2 annota- α = 3/4, and train the model using AdaGrad
+tion standard, as well as all the preprocessing steps (Duchi et al., 2011), stochastically sampling non-
+described in (Wang and Manning, 2013). We use a zero elements from X , with initial learning rate of
+comprehensive set of discrete features that comes 0.05. We run 50 iterations for vectors smaller than
+with the standard distribution of the Stanford NER 300 dimensions, and 100 iterations otherwise (see
+model (Finkel et al., 2005). A total of 437,905 Section 4.6 for more details about the convergence
+discrete features were generated for the CoNLL- rate). Unless otherwise noted, we use a context of
+2003 training dataset. In addition, 50-dimensional ten words to the left and ten words to the right.
+vectors for each word of a five-word context are The model generates two sets of word vectors,
+added and used as continuous features. With these W and W̃ . When X is symmetric, W and W̃ are
+features as input, we trained a conditional random equivalent and differ only as a result of their ran-
+field (CRF) with exactly the same setup as the dom initializations; the two sets of vectors should
+CRFjoin model of (Wang and Manning, 2013). perform equivalently. On the other hand, there is
+
+evidence that for certain types of neural networks,
+4.2 Corpora and training details training multiple instances of the network and then
+We trained our model on five corpora of varying combining the results can help reduce overfitting
+sizes: a 2010 Wikipedia dump with 1 billion to- and noise and generally improve results (Ciresan
+kens; a 2014 Wikipedia dump with 1.6 billion to- et al., 2012). With this in mind, we choose to use
+kens; Gigaword 5 which has 4.3 billion tokens; the 5To demonstrate the scalability of the model, we also
+combination Gigaword5 + Wikipedia2014, which trained it on a much larger sixth corpus, containing 840 bil-
+
+lion tokens of web data, but in this case we did not lowercase
+the analogy task. This number is evaluated on a subset of the the vocabulary, so the results are not directly comparable.
+dataset so it is not included in Table 2. 3COSMUL performed 6For the model trained on Common Crawl data, we use a
+worse than cosine similarity in almost all of our experiments. larger vocabulary of about 2 million words.
+
+Accuracy [%]
+
+Accuracy [%]
+
+Accuracy [%]
+
+
+
+the sum W +W̃ as our word vectors. Doing so typ- Table 3: Spearman rank correlation on word simi-
+ically gives a small boost in performance, with the larity tasks. All vectors are 300-dimensional. The
+biggest increase in the semantic analogy task. CBOW∗ vectors are from the word2vec website
+
+We compare with the published results of a va- and differ in that they contain phrase vectors.
+riety of state-of-the-art models, as well as with
+our own results produced using the word2vec Model Size WS353 MC RG SCWS RW
+tool and with several baselines using SVDs. With SVD 6B 35.3 35.1 42.5 38.3 25.6
+word2vec, we train the skip-gram (SG†) and SVD-S 6B 56.5 71.5 71.0 53.6 34.7
+continuous bag-of-words (CBOW†) models on the SVD-L 6B 65.7 72.7 75.1 56.5 37.0
+6 billion token corpus (Wikipedia 2014 + Giga- CBOW† 6B 57.2 65.6 68.2 57.0 32.5
+
+word 5) with a vocabulary of the top 400,000 most SG† 6B 62.8 65.2 69.7 58.1 37.2
+GloVe 6B 65.8 72.7 77.8 53.9 38.1
+
+frequent words and a context window size of 10.
+SVD-L 42B 74.0 76.4 74.1 58.3 39.9
+
+We used 10 negative samples, which we show in GloVe 42B 75.9 83.6 82.9 59.6 47.8
+Section 4.6 to be a good choice for this corpus. CBOW∗ 100B 68.4 79.6 75.4 59.4 45.5
+
+For the SVD baselines, we generate a truncated
+matrix Xtrunc which retains the information of how L model on this larger corpus. The fact that this
+frequently each word occurs with only the top basic SVD model does not scale well to large cor-
+10,000 most frequent words. This step is typi- pora lends further evidence to the necessity of the
+cal of many matrix-factorization-based methods as type of weighting scheme proposed in our model.
+the extra columns can contribute a disproportion- Table 3 shows results on five different word
+ate number of zero entries and the methods are similarity datasets. A similarity score is obtained
+otherwise computationally expensive. from the word vectors by first normalizing each
+
+The singular vectors of this matrix constitute feature across the vocabulary and then calculat-
+the baseline “SVD”. We also evaluate two related ing the cosine similarity. We compute Spearman’s
+baselines: “SVD-S” in which we take the SVD of
+√ rank correlation coefficient between this score and
+
+Xtrunc, and “SVD-L” in which we take the SVD the human judgments. CBOW∗ denotes the vec-
+of log(1+ Xtrunc). Both methods help compress the
+otherwise large range of values in X .7
+
+tors available on the word2vec website that are
+trained with word and phrase vectors on 100B
+
+4.3 Results words of news data. GloVe outperforms it while
+using a corpus less than half the size.
+
+We present results on the word analogy task in Ta-
+Table 4 shows results on the NER task with the
+
+ble 2. The GloVe model performs significantly
+CRF-based model. The L-BFGS training termi-
+
+better than the other baselines, often with smaller
+nates when no improvement has been achieved on
+
+vector sizes and smaller corpora. Our results us-
+the dev set for 25 iterations. Otherwise all config-
+
+ing the word2vec tool are somewhat better than
+urations are identical to those used by Wang and
+
+most of the previously published results. This is
+Manning (2013). The model labeled Discrete is
+
+due to a number of factors, including our choice to
+the baseline using a comprehensive set of discrete
+
+use negative sampling (which typically works bet-
+features that comes with the standard distribution
+
+ter than the hierarchical softmax), the number of
+of the Stanford NER model, but with no word vec-
+
+negative samples, and the choice of the corpus.
+tor features. In addition to the HPCA and SVD
+
+We demonstrate that the model can easily be
+models discussed previously, we also compare to
+
+trained on a large 42 billion token corpus, with a
+the models of Huang et al. (2012) (HSMN) and
+
+substantial corresponding performance boost. We
+Collobert and Weston (2008) (CW). We trained
+
+note that increasing the corpus size does not guar-
+the CBOW model using the word2vec tool8.
+
+antee improved results for other models, as can be
+The GloVe model outperforms all other methods
+
+seen by the decreased performance of the SVD-
+on all evaluation metrics, except for the CoNLL
+
+7We also investigated several other weighting schemes for test set, on which the HPCA method does slightly
+transforming X ; what we report here performed best. Many better. We conclude that the GloVe vectors are
+weighting schemes like PPMI destroy the sparsity of X and
+therefore cannot feasibly be used with large vocabularies. useful in downstream NLP tasks, as was first
+With smaller vocabularies, these information-theoretic trans-
+formations do indeed work well on word similarity measures, 8We use the same parameters as above, except in this case
+but they perform very poorly on the word analogy task. we found 5 negative samples to work slightly better than 10.
+
+
+
+Table 4: F1 score on NER task with 50d vectors. Semantic Syntactic Overall
+85
+
+Discrete is the baseline without word vectors. We 80
+
+use publicly-available vectors for HPCA, HSMN, 75
+
+and CW. See text for details. 70
+
+Model Dev Test ACE MUC7 65
+
+Discrete 91.0 85.4 77.4 73.4 60
+
+55
+SVD 90.8 85.7 77.3 73.7
+
+50
+SVD-S 91.0 85.5 77.6 74.3 Gigaword5 + 
+
+Wiki2010 Wiki2014 Gigaword5
+SVD-L 90.5 84.8 73.6 71.5 Wiki2014 Common Crawl 
+
+1B tokens 1.6B tokens 4.3B tokens 6B tokens 42B tokens
+
+HPCA 92.6 88.7 81.7 80.7
+HSMN 90.5 85.7 78.7 74.7 Figure 3: Accuracy on the analogy task for 300-
+
+CW 92.2 87.4 81.7 80.2 dimensional vectors trained on different corpora.
+CBOW 93.1 88.2 82.2 81.1 entries are updated to assimilate new knowledge,
+GloVe 93.2 88.3 82.9 82.2 whereas Gigaword is a fixed news repository with
+
+shown for neural vectors in (Turian et al., 2010). outdated and possibly incorrect information.
+
+4.4 Model Analysis: Vector Length and 4.6 Model Analysis: Run-time
+Context Size The total run-time is split between populating X
+
+In Fig. 2, we show the results of experiments that and training the model. The former depends on
+vary vector length and context window. A context many factors, including window size, vocabulary
+window that extends to the left and right of a tar- size, and corpus size. Though we did not do so,
+get word will be called symmetric, and one which this step could easily be parallelized across mul-
+extends only to the left will be called asymmet- tiple machines (see, e.g., Lebret and Collobert
+ric. In (a), we observe diminishing returns for vec- (2014) for some benchmarks). Using a single
+tors larger than about 200 dimensions. In (b) and thread of a dual 2.1GHz Intel Xeon E5-2658 ma-
+(c), we examine the effect of varying the window chine, populating X with a 10 word symmetric
+size for symmetric and asymmetric context win- context window, a 400,000 word vocabulary, and
+dows. Performance is better on the syntactic sub- a 6 billion token corpus takes about 85 minutes.
+task for small and asymmetric context windows, Given X , the time it takes to train the model de-
+which aligns with the intuition that syntactic infor- pends on the vector size and the number of itera-
+mation is mostly drawn from the immediate con- tions. For 300-dimensional vectors with the above
+text and can depend strongly on word order. Se- settings (and using all 32 cores of the above ma-
+mantic information, on the other hand, is more fre- chine), a single iteration takes 14 minutes. See
+quently non-local, and more of it is captured with Fig. 4 for a plot of the learning curve.
+larger window sizes.
+
+4.7 Model Analysis: Comparison with
+4.5 Model Analysis: Corpus Size word2vec
+
+In Fig. 3, we show performance on the word anal- A rigorous quantitative comparison of GloVe with
+ogy task for 300-dimensional vectors trained on word2vec is complicated by the existence of
+different corpora. On the syntactic subtask, there many parameters that have a strong effect on per-
+is a monotonic increase in performance as the cor- formance. We control for the main sources of vari-
+pus size increases. This is to be expected since ation that we identified in Sections 4.4 and 4.5 by
+larger corpora typically produce better statistics. setting the vector length, context window size, cor-
+Interestingly, the same trend is not true for the se- pus, and vocabulary size to the configuration men-
+mantic subtask, where the models trained on the tioned in the previous subsection.
+smaller Wikipedia corpora do better than those The most important remaining variable to con-
+trained on the larger Gigaword corpus. This is trol for is training time. For GloVe, the rele-
+likely due to the large number of city- and country- vant parameter is the number of training iterations.
+based analogies in the analogy dataset and the fact For word2vec, the obvious choice would be the
+that Wikipedia has fairly comprehensive articles number of training epochs. Unfortunately, the
+for most such locations. Moreover, Wikipedia’s code is currently designed for only a single epoch:
+
+Accuracy [%]
+
+
+
+Training Time (hrs) Training Time (hrs)
+1 2 3 4 5 6 3 6 9 12 15 18 21 24
+
+72 72
+
+70 70
+
+68 GloVe 68
+CBOW
+
+66 66
+
+ 64 64 GloVe
+Skip-Gram
+
+62 62
+
+5 10 15 20 25 20 40 60 80 100
+60 60
+
+Iterations (GloVe) Iterations (GloVe)
+1357 10 15 20 25 30 40 50 1 2 3 4 5 6 7 10 12 15 20
+Negative Samples (CBOW) Negative Samples (Skip-Gram)
+
+(a) GloVe vs CBOW (b) GloVe vs Skip-Gram
+
+Figure 4: Overall accuracy on the word analogy task as a function of training time, which is governed by
+the number of iterations for GloVe and by the number of negative samples for CBOW (a) and skip-gram
+(b). In all cases, we train 300-dimensional vectors on the same 6B token corpus (Wikipedia 2014 +
+Gigaword 5) with the same 400,000 word vocabulary, and use a symmetric context window of size 10.
+
+it specifies a learning schedule specific to a single methods or from prediction-based methods. Cur-
+pass through the data, making a modification for rently, prediction-based models garner substantial
+multiple passes a non-trivial task. Another choice support; for example, Baroni et al. (2014) argue
+is to vary the number of negative samples. Adding that these models perform better across a range of
+negative samples effectively increases the number tasks. In this work we argue that the two classes
+of training words seen by the model, so in some of methods are not dramatically different at a fun-
+ways it is analogous to extra epochs. damental level since they both probe the under-
+
+We set any unspecified parameters to their de- lying co-occurrence statistics of the corpus, but
+fault values, assuming that they are close to opti- the efficiency with which the count-based meth-
+mal, though we acknowledge that this simplifica- ods capture global statistics can be advantageous.
+tion should be relaxed in a more thorough analysis. We construct a model that utilizes this main ben-
+
+In Fig. 4, we plot the overall performance on efit of count data while simultaneously capturing
+the analogy task as a function of training time. the meaningful linear substructures prevalent in
+The two x-axes at the bottom indicate the corre- recent log-bilinear prediction-based methods like
+sponding number of training iterations for GloVe word2vec. The result, GloVe, is a new global
+and negative samples for word2vec. We note log-bilinear regression model for the unsupervised
+that word2vec’s performance actually decreases learning of word representations that outperforms
+if the number of negative samples increases be- other models on word analogy, word similarity,
+yond about 10. Presumably this is because the and named entity recognition tasks.
+negative sampling method does not approximate
+the target probability distribution well.9 Acknowledgments
+
+For the same corpus, vocabulary, window size, We thank the anonymous reviewers for their valu-
+and training time, GloVe consistently outperforms able comments. Stanford University gratefully
+word2vec. It achieves better results faster, and acknowledges the support of the Defense Threat
+also obtains the best results irrespective of speed. Reduction Agency (DTRA) under Air Force Re-
+
+search Laboratory (AFRL) contract no. FA8650-
+5 Conclusion 10-C-7020 and the Defense Advanced Research
+Recently, considerable attention has been focused Projects Agency (DARPA) Deep Exploration and
+on the question of whether distributional word Filtering of Text (DEFT) Program under AFRL
+representations are best learned from count-based contract no. FA8750-13-2-0040. Any opinions,
+
+findings, and conclusion or recommendations ex-
+9In contrast, noise-contrastive estimation is an approxi- pressed in this material are those of the authors and
+
+mation which improves with more negative samples. In Ta-
+ble 1 of (Mnih et al., 2013), accuracy on the analogy task is a do not necessarily reflect the view of the DTRA,
+non-decreasing function of the number of negative samples. AFRL, DEFT, or the US government.
+
+Accuracy [%]
+
+Accuracy [%]
+
+
+
+References Word Representations via Global Context and
+Multiple Word Prototypes. In ACL.
+
+Tom M. Apostol. 1976. Introduction to Analytic
+Number Theory. Introduction to Analytic Num- Rémi Lebret and Ronan Collobert. 2014. Word
+ber Theory. embeddings through Hellinger PCA. In EACL.
+
+Marco Baroni, Georgiana Dinu, and Germán Omer Levy, Yoav Goldberg, and Israel Ramat-
+Kruszewski. 2014. Don’t count, predict! A Gan. 2014. Linguistic regularities in sparse and
+systematic comparison of context-counting vs. explicit word representations. CoNLL-2014.
+context-predicting semantic vectors. In ACL. Kevin Lund and Curt Burgess. 1996. Producing
+
+Yoshua Bengio. 2009. Learning deep architectures high-dimensional semantic spaces from lexical
+for AI. Foundations and Trends in Machine co-occurrence. Behavior Research Methods, In-
+Learning. strumentation, and Computers, 28:203–208.
+
+Yoshua Bengio, Réjean Ducharme, Pascal Vin- Minh-Thang Luong, Richard Socher, and Christo-
+cent, and Christian Janvin. 2003. A neural prob- pher D Manning. 2013. Better word represen-
+abilistic language model. JMLR, 3:1137–1155. tations with recursive neural networks for mor-
+
+phology. CoNLL-2013.
+John A. Bullinaria and Joseph P. Levy. 2007. Ex-
+
+tracting semantic representations from word co- Tomas Mikolov, Kai Chen, Greg Corrado, and Jef-
+occurrence statistics: A computational study. frey Dean. 2013a. Efficient Estimation of Word
+Behavior Research Methods, 39(3):510–526. Representations in Vector Space. In ICLR Work-
+
+shop Papers.
+Dan C. Ciresan, Alessandro Giusti, Luca M. Gam-
+
+bardella, and Jürgen Schmidhuber. 2012. Deep Tomas Mikolov, Ilya Sutskever, Kai Chen, Greg
+neural networks segment neuronal membranes Corrado, and Jeffrey Dean. 2013b. Distributed
+in electron microscopy images. In NIPS, pages representations of words and phrases and their
+2852–2860. compositionality. In NIPS, pages 3111–3119.
+
+Ronan Collobert and Jason Weston. 2008. A uni- Tomas Mikolov, Wen tau Yih, and Geoffrey
+fied architecture for natural language process- Zweig. 2013c. Linguistic regularities in con-
+ing: deep neural networks with multitask learn- tinuous space word representations. In HLT-
+ing. In Proceedings of ICML, pages 160–167. NAACL.
+
+Ronan Collobert, Jason Weston, Léon Bottou, George A. Miller and Walter G. Charles. 1991.
+Michael Karlen, Koray Kavukcuoglu, and Pavel Contextual correlates of semantic similarity.
+Kuksa. 2011. Natural Language Processing (Al- Language and cognitive processes, 6(1):1–28.
+most) from Scratch. JMLR, 12:2493–2537. Andriy Mnih and Koray Kavukcuoglu. 2013.
+
+Scott Deerwester, Susan T. Dumais, George W. Learning word embeddings efficiently with
+Furnas, Thomas K. Landauer, and Richard noise-contrastive estimation. In NIPS.
+Harshman. 1990. Indexing by latent semantic Douglas L. T. Rohde, Laura M. Gonnerman,
+analysis. Journal of the American Society for and David C. Plaut. 2006. An improved
+Information Science, 41. model of semantic similarity based on lexical
+
+John Duchi, Elad Hazan, and Yoram Singer. 2011. co-occurence. Communications of the ACM,
+Adaptive subgradient methods for online learn- 8:627–633.
+ing and stochastic optimization. JMLR, 12. Herbert Rubenstein and John B. Goodenough.
+
+Lev Finkelstein, Evgenly Gabrilovich, Yossi Ma- 1965. Contextual correlates of synonymy. Com-
+tias, Ehud Rivlin, Zach Solan, Gadi Wolfman, munications of the ACM, 8(10):627–633.
+and Eytan Ruppin. 2001. Placing search in con- Fabrizio Sebastiani. 2002. Machine learning in au-
+text: The concept revisited. In Proceedings tomated text categorization. ACM Computing
+of the 10th international conference on World Surveys, 34:1–47.
+Wide Web, pages 406–414. ACM. Richard Socher, John Bauer, Christopher D. Man-
+
+Eric H. Huang, Richard Socher, Christopher D. ning, and Andrew Y. Ng. 2013. Parsing With
+Manning, and Andrew Y. Ng. 2012. Improving Compositional Vector Grammars. In ACL.
+
+
+
+Stefanie Tellex, Boris Katz, Jimmy Lin, Aaron
+Fernandes, and Gregory Marton. 2003. Quanti-
+tative evaluation of passage retrieval algorithms
+for question answering. In Proceedings of the
+SIGIR Conference on Research and Develop-
+ment in Informaion Retrieval.
+
+Erik F. Tjong Kim Sang and Fien De Meul-
+der. 2003. Introduction to the CoNLL-2003
+shared task: Language-independent named en-
+tity recognition. In CoNLL-2003.
+
+Joseph Turian, Lev Ratinov, and Yoshua Bengio.
+2010. Word representations: a simple and gen-
+eral method for semi-supervised learning. In
+Proceedings of ACL, pages 384–394.
+
+Mengqiu Wang and Christopher D. Manning.
+2013. Effect of non-linear deep architecture in
+sequence labeling. In Proceedings of the 6th
+International Joint Conference on Natural Lan-
+guage Processing (IJCNLP).

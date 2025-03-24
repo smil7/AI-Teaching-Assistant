@@ -1,0 +1,1292 @@
+﻿On the difficulty of training Recurrent Neural Networks
+
+Razvan Pascanu pascanur@iro.umontreal.ca
+Universite de Montreal
+
+Tomas Mikolov t.mikolov@gmail.com
+Brno University
+
+Yoshua Bengio yoshua.bengio@umontreal.ca
+Universite de Montreal
+
+Abstract
+There are two widely known issues with prop-
+erly training Recurrent Neural Networks, the ut x Et
+
+t
+
+vanishing and the exploding gradient prob-
+lems detailed in Bengio et al. (1994). In Figure 1. Schematic of a recurrent neural network. The
+
+this paper we attempt to improve the under- recurrent connections in the hidden layer allow information
+to persist from one input to another.
+
+standing of the underlying issues by explor-
+ing these problems from an analytical, a geo-
+metric and a dynamical systems perspective.
+Our analysis is used to justify a simple yet ef-
+
+and exploding gradient problems described in Bengio
+fective solution. We propose a gradient norm
+
+et al. (1994).
+clipping strategy to deal with exploding gra-
+dients and a soft constraint for the vanishing 1.1. Training recurrent networks
+gradients problem. We validate empirically
+
+A generic recurrent neural network, with input ut and
+our hypothesis and proposed solutions in the
+
+state xt for time step t, is given by equation (1). In
+experimental section.
+
+the theoretical section of this paper we will sometimes
+make use of the specific parametrization given by equa-
+tion (11) 1 in order to provide more precise conditions
+
+1. Introduction and intuitions about the everyday use-case.
+A recurrent neural network (RNN), e.g. Fig. 1, is a
+neural network model proposed in the 80’s (Rumelhart xt = F (xt−1,ut, θ) (1)
+et al., 1986; Elman, 1990; Werbos, 1988) for modeling
+time series. The structure of the network is similar to xt = Wrecσ(xt−1) + Winut + b (2)
+that of a standard multilayer perceptron, with the dis-
+
+The parameters of the model are given by the recurrent
+tinction that we allow connections among hidden units
+
+weight matrix Wrec, the biases b and input weight
+associated with a time delay. Through these connec-
+
+matrix Win, collected in θ for the general case. x0 is
+tions the model can retain information about the past
+
+provided by the user, set to zero or learned, and σ is an
+inputs, enabling it to discover temporal correlations
+
+element-wise function (usually the tanh or sigmoid).
+between events that are possibly far away from each
+
+A cost E measures the performance of the network
+other in the data (a crucial property for proper learn-
+
+on some given task and it can be ∑broken apart into
+ing of time series).
+
+individual costs for each step E = 1≤t≤T Et, where
+While in principle the recurrent network is a simple Et = L(xt).
+and powerful model, in practice, it is unfortunately
+
+One approach that can be used to compute the nec-
+hard to train properly. Among the main reasons why
+
+essary gradients is Backpropagation Through Time
+this model is so unwieldy are the vanishing gradient
+
+(BPTT), where the recurrent model is represented as
+
+1 This formulation is equivalent to the more widely
+known equation xt = σ(Wrecxt−1 + Winut + b), and it
+was chosen for convenience.
+
+arXiv:1211.5063v2  [cs.LG]  16 Feb 2013
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+a deep multi-layer one (with an unbounded number of ∂xt
+∂x (equation (5)) transport the error “in time“ from
+
+k
+layers) and backpropagation is applied on the unrolled step t back to step k. We would further loosely distin-
+model (see Fig. 2). guish between long term and short term contributions,
+
+where long term refers to components for which k  t
+and short term to everything else.
+
+Et−1 Et Et+1
+
+∂Et−1 ∂Et ∂Et+1 2. Exploding and Vanishing Gradients
+∂xt−1 ∂xt ∂xt+1
+
+x As introduced in Bengio et al. (1994), the exploding
+t−1 xt xt+1
+
+∂xt−1 ∂xt ∂xt+1 ∂xt+2 gradients problem refers to the large increase in the
+∂x − ∂x ∂x
+
+t 2 t−1 ∂xt t+1
+
+norm of the gradient during training. Such events are
+ut−1 ut ut+1 caused by the explosion of the long term components,
+
+which can grow exponentially more then short term
+Figure 2. Unrolling recurrent neural networks in time by ones. The vanishing gradients problem refers to the
+creating a copy of the model for each time step. We denote
+
+opposite behaviour, when long term components go
+by xt the hidden state of the network at time t, by ut the
+
+exponentially fast to norm 0, making it impossible for
+input of the network at time t and by Et the error obtained
+from the output at time t. the model to learn correlation between temporally dis-
+
+tant events.
+
+We will diverge from the classical BPTT equations at 2.1. The mechanics
+this point and re-write the gradients (see equations (3),
+(4) and (5)) in order to better highlight the exploding To understand this phenomenon we need to look at the
+
+gradients problem. These equations were obtained by form of each temporal component, and in particular at
+
+writing the gradients in a the matrix factors ∂xt
+
+∑sum-of-products form. ∂x (see equation (5)) that take the
+k
+
+form of a product of t − k Jacobian matrices. In the
+∂E ∂Et same way a product of t − k real numbers can shrink
+
+= (3)
+∂θ ∂θ to zero or explode to infinity, so does this product of
+
+∑ (1≤t≤T ) matrices (along some direction v).
+∂E +
+
+t ∂Et ∂xt ∂ xk
+= (4) In what follows we will try to formalize these intu-
+
+∏∂θ ∂xt ∂xk ∂θ
+1≤k≤t itions (extending a similar derivation done in Bengio
+
+et al. (1994) where only a single hidden unit case was
+∂xt ∂x ∏
+
+i
+= = WT iag(σ′(xi−1)) (5) considered).
+
+∂xk ∂x recd
+≥ i−1
+t i>k t≥i>k If we consider a linear version of the model (i.e. set σ to
+
+∂+xk the identity function in equation (11)) we can use the
+∂θ refers to the “immediate” partial derivative of
+
+the state x power iteration method to formally analyze this prod-
+k with respect to θ, i.e., where xk−1 is
+
+taken as a constant with respect to θ. Specifically, uct of Jacobian matrices and obtain tight conditions
+
+considering equation 2, the value of any row i of the for when the gradients explode or vanish (see the sup-
++
+
+matrix ( ∂ xk plementary materials for a detailed derivation of these
+∂W ) is just σ(xk−1). Equation (5) also
+
+rec conditions). It is sufficient for the largest eigenvalue
+provides the form of Jacobian matrix ∂xi
+
+∂x for the
+i−1 λ1 of the recurrent weight matrix to be smaller than
+
+specific parametrization given in equation (11), where 1 for long term components to vanish (as t→∞) and
+diag converts a vector into a diagonal matrix, and σ′ necessary for it to be larger than 1 for gradients to
+computes the derivative of σ in an element-wise fash- explode.
+ion.
+
+We can generalize these results for nonlinear functions
+Note that each term ∂Et
+
+∂θ from equation (3) has the σ where the absolute values of σ′(x) is bounded (say
+same form and the behaviour of these individual terms by a value γ ∈ R) and therefore ‖diag(σ′(xk))‖ ≤ γ.
+determine the behaviour of the sum. Henceforth we
+will focus on one such generic term, calling it simply We first prove that it is sufficient for λ 1
+
+1 < γ , where
+
+the gradient when there is no confusion. λ1 is the absolute value of the largest eigenvalue of
+the recurrent weight matrix Wrec, for the vanishing
+
+Any gradient component ∂Et
+∂θ is also a sum (see equa- gradient problem to occur. Note that we assume the
+
+tion (4)), whose terms we refer to as temporal contribu- parametrization given by equation (11). The Jacobian
+tions or temporal components. One can see that each matrix ∂xk+1
+
+∂x is given by WT ′
+such temporal contribution ∂Et ∂xt ∂+xk k recdiag(σ (xk)). The 2-
+
+∂xt ∂xk ∂θ measures how norm of this Jacobian is bounded by the product of
+θ at step k affects the cost at step t > k. The factors
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+the norms of the two matrices (see equation (6)). Due (Doya, 1993) hypothesizes that such bifurcation cross-
+to our assumption, this implies that it is smaller than ings could cause the gradients to explode. We would
+1. ∥ like to extend this observation into a sufficient condi-
+
+∥
+∀k ∥∥ ∥
+
+∂xk+1 ∥
+, ∥ ∥
+
+≤ ∥ T
+
+∂x ∥ ∥
+W ∥ tion for gradients to explode, and for that reason we
+
+1
+rec ‖diag(σ′(xk))‖ < γ < 1 will re-use the one-hidden unit model (and plot) from
+
+k ∥∥ ∥ γ (Doya, 1993) (see Fig. 3).
+(6)
+
+Let η ∈ R be such that ∀k, ∥∂xk+1 ∥
+∂x ∥ ≤ The x-axis covers the parameter b and the y-axis the
+
+η < 1. The
+k asymptotic state x∞. The bold line follows the move-
+
+existence of η is given by equation (6). By induction ment of the final point attractor, x∞, as b changes. At
+over i, we can sh(ow that b1 we have a bifurcation boundary where a new attrac-
+
+tor emerges (when b decreases from∞), while at b2 we
+t
+
+∂E ∏− )
+1
+
+t ∂xi+1 ≤ t
+ηt−k
+
+∂E have another that results in the disappearance of one
+(7)
+
+∂xt ∂xi ∂xt of the two attractors. In the interval (b1, b2) we are in
+i=k
+
+a rich regime, where there are two attractors and the
+
+As η < 1, it follows that, according to equation (7), change in position of boundary between them, as we
+
+long term contributions (for which t−k is large) go to change b, is traced out by a dashed line. The vector
+
+0 exponentially fast with t− k.  field (gray dashed arrows) describe the evolution of the
+state x if the network is initialized in that region.
+
+By inverting this proof we get the necessary condition
+for exploding gradients, namely that the largest eigen-
+value λ1 is larger than 1
+
+γ (otherwise the long term com-
+ponents would vanish instead of exploding). For tanh
+we have γ = 1 while for sigmoid we have γ = 1/4.
+
+2.2. Drawing similarities with Dynamical
+Systems
+
+We can improve our understanding of the exploding
+gradients and vanishing gradients problems by employ-
+ing a dynamical systems perspective, as it was done
+before in Doya (1993); Bengio et al. (1993).
+
+We recommend reading Strogatz (1994) for a formal
+and detailed treatment of dynamical systems theory. Figure 3. Bifurcation diagram of a single hidden unit RNN
+
+For any parameter assignment θ, depending on the ini- (with fixed recurrent weight of 5.0 and adjustable bias b;
+
+tial state x0, the state xt of an autonomous dynamical example introduced in Doya (1993)). See text.
+
+system converges, under the repeated application of
+the map F , to one of several possible different attrac- We show that there are two types of events that could
+tor states (e.g. point attractors, though other type of lead to a large change in xt, with t→∞. One is cross-
+attractors exist). The model could also find itself in ing a boundary between basins of attraction (depicted
+a chaotic regime, case in which some of the following with a unfilled circles), while the other is crossing a bi-
+observations may not hold, but that is not treated in furcation boundary (filled circles). For large t, the ∆xt
+depth here. Attractors describe the asymptotic be- resulting from a change in b will be large even for very
+haviour of the model. The state space is divided into small changes in b (as the system is attracted towards
+basins of attraction, one for each attractor. If the different attractors) which leads to a large gradient.
+model is started in one basin of attraction, the model
+
+It is however neither necessary nor sufficient to cross
+will converge to the corresponding attractor as t grows.
+
+a bifurcation for the gradients to explode, as bifurca-
+Dynamical systems theory tells us that as θ changes tions are global events that could have no effect lo-
+slowly, the asymptotic behaviour changes smoothly cally. Learning traces out a path in the parameter-
+almost everywhere except for certain crucial points state space. If we are at a bifurcation boundary, but
+where drastic changes occur (the new asymptotic be- the state of the model is such that it is in the basin of
+haviour ceases to be topologically equivalent to the old attraction of one attractor (from many possible attrac-
+one). These points are called bifurcation boundaries tors) that does not change shape or disappear when
+and are caused by attractors that appear, disappear the bifurcation is crossed, then this bifurcation will
+or change shape. not affect learning.
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+Crossing boundaries between basins of attraction is a which for large t could lead (unless the input maps Ut
+local event, and it is sufficient for the gradients to ex- are opposing this) to a large discrepancy in xt. There-
+plode. If we assume that crossing into an emerging fore studying the asymptotic behaviour of F̃ can pro-
+attractor or from a disappearing one (due to a bifur- vide useful information about where such events are
+cation) qualifies as crossing some boundary between likely to happen.
+attractors, that we can formulate a sufficient condition
+for gradients to explode which encapsulates the obser-
+vations made in Doya (1993), extending them to also F2 F U2
+
+U 2
+2
+
+normal crossing of boundaries between different basins F̃ F̃
+F1
+
+of attractions. Note how in the figure, there are only F1
+U1 U1
+
+two values of b with a bifurcation, but a whole range
+of values for which there can be a boundary crossing. F̃ F̃
+
+∆x
+x 0
+t xt
+
+Another limitation of previous analysis is that they ∆xt
+
+only consider autonomous systems and assume the Figure 5. Illustrates how one can break apart the maps
+observations hold for input-driven models. In (Ben- F1, ..Ft into a constant map F̃ and the maps U1, .., Ut. The
+gio et al., 1994) input is dealt with by assuming it dotted vertical line represents the boundary between basins
+is bounded noise. The downside of this approach is of attraction, and the straight dashed arrow the direction
+that it limits how one can reason about the input. In of the map F̃ on each side of the boundary. This diagram
+
+practice, the input is supposed to drive the dynamical is an extension of Fig. 4.
+
+system, being able to leave the model in some attrac-
+tor state, or kick it out of the basin of attraction when One interesting observation from the dynamical sys-
+certain triggering patterns present themselves. tems perspective with respect to vanishing gradients
+
+is the following. If the factors ∂xt
+∂x go to zero (for t−k
+
+We propose to extend our analysis to input driven k
+
+large), it means that xt does not depend on xk (if
+models by folding the input into the map. We consider
+
+we change xk by some ∆, xt stays the same). This
+the family of maps Ft, where we apply a different Ft at
+
+translates into the model at xt being close to conver-
+each step. Intuitively, for the gradients to explode we
+
+gence towards some attractor (which it would reach
+require the same behaviour as before, where (at least
+
+from anywhere in the neighbourhood of xk).
+in some direction) the maps F1, .., Ft agree and change
+direction. Fig. 4 describes this behaviour. 2.3. The geometrical interpretation
+
+Let us consider a simple one hidden unit model (equa-
+F2 F2 tion (8)) where we provide an initial state x0 and train
+
+the model to have a specific target value after 50 steps.
+F1
+
+F1 F
+F 3 Note that for simplicity we assume no input.
+
+3
+
+∆x
+x 0
+t xt xt = wσ(xt−1) + b (8)
+
+∆xt
+
+Figure 4. This diagram illustrates how the change in xt, Fig. 6 shows the error surface E50 = (σ(x50) − 0.7)2,
+∆xt, can be large for a small ∆x0. The blue vs red where x0 = .5 and σ to be the sigmoid function.
+(left vs right) trajectories are generated by the same maps
+F1, F2, . . . for two different initial states. We can more easily analyze the behavior of this model
+
+by further simplifying it to be linear (σ then being the
+identity function), with b = 0. xt = x0w
+
+t from which it
+For the specific parametrization provided by equa-
+
+follows that ∂xt
+∂w = tx0w
+
+t−1 and ∂2xt
+tion (11) we can take the analogy one step further ∂w2 = t(t−1)x0w
+
+t−2,
+implying that when the first derivative explodes, so
+
+by decomposing the maps Ft into a fixed map F̃
+does the second derivative.
+
+and a time-varying one Ut. F (x) = Wrecσ(x) + b
+corresponds to an input-less recurrent network, while In the general case, when the gradients explode they do
+Ut(x) = x + Winut describes the effect of the input. so along some directions v. This says that there exists,
+This is depicted in in Fig. 5. Since Ut changes with in such situations, a vector v such that ∂Et
+
+∂θ v ≥ Cαt,
+time, it can not be analyzed using standard dynami- where C,α ∈ R and α > 1. For the linear case (σ is the
+cal systems tools, but F̃ can. This means that when a identity function), v is the eigenvector corresponding
+boundary between basins of attractions is crossed for to the largest eigenvalue of Wrec. If this bound is
+F̃ , the state will move towards a different attractor, tight, we hypothesize that in general when gradients
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+rithm should work even when the rate of growth of the
+gradient is not the same as the one of the curvature
+(a case for which a second order method would fail
+as the ratio between the gradient and curvature could
+still explode).
+
+Our hypothesis could also help to understand the re-
+cent success of the Hessian-Free approach compared
+to other second order methods. There are two key dif-
+ferences between Hessian-Free and most other second-
+order algorithms. First, it uses the full Hessian matrix
+and hence can deal with exploding directions that are
+
+Figure 6. We plot the error surface of a single hidden unit not necessarily axis-aligned. Second, it computes a
+recurrent network, highlighting the existence of high cur- new estimate of the Hessian matrix before each up-
+vature walls. The solid lines depicts standard trajectories date step and can take into account abrupt changes in
+that gradient descent might follow. Using dashed arrow curvature (such as the ones suggested by our hypothe-
+the diagram shows what would happen if the gradients is
+
+sis) while most other approaches use a smoothness as-
+rescaled to a fixed size when its norm is above a threshold.
+
+sumption, i.e., averaging 2nd order signals over many
+steps.
+
+explode so does the curvature along v, leading to a 3. Dealing with the exploding and
+wall in the error surface, like the one seen in Fig. 6. vanishing gradient
+
+If this holds, then it gives us a simple solution to the 3.1. Previous solutions
+exploding gradients problem depicted in Fig. 6. Using an L1 or L2 penalty on the recurrent weights can
+
+If both the gradient and the leading eigenvector of the help with exploding gradients. Given that the parame-
+
+curvature are aligned with the exploding direction v, it ters initialized with small values, the spectral radius of
+
+follows that the error surface has a steep wall perpen- Wrec is probably smaller than 1, from which it follows
+
+dicular to v (and consequently to the gradient). This that the gradient can not explode (see necessary condi-
+
+means that when stochastic gradient descent (SGD) tion found in section 2.1). The regularization term can
+
+reaches the wall and does a gradient descent step, it ensure that during training the spectral radius never
+
+will be forced to jump across the valley moving perpen- exceeds 1. This approach limits the model to a sim-
+
+dicular to the steep walls, possibly leaving the valley ple regime (with a single point attractor at the origin),
+
+and disrupting the learning process. where any information inserted in the model has to die
+out exponentially fast in time. In such a regime we can
+
+The dashed arrows in Fig. 6 correspond to ignoring not train a generator network, nor can we exhibit long
+the norm of this large step, ensuring that the model term memory traces.
+stays close to the wall. The key insight is that all the
+steps taken when the gradient explodes are aligned Doya (1993) proposes to pre-program the model (to
+
+with v and ignore other descent direction (i.e. the initialize the model in the right regime) or to use
+
+model moves perpendicular to the wall). At the wall, a teacher forcing. The first proposal assumes that if
+
+small-norm step in the direction of the gradient there- the model exhibits from the beginning the same kind
+
+fore merely pushes us back inside the smoother low- of asymptotic behaviour as the one required by the
+
+curvature region besides the wall, whereas a regular target, then there is no need to cross a bifurcation
+
+gradient step would bring us very far, thus slowing or boundary. The downside is that one can not always
+
+preventing further training. Instead, with a bounded know the required asymptotic behaviour, and, even if
+
+step, we get back in that smooth region near the wall such information is known, it is not trivial to initial-
+
+where SGD is free to explore other descent directions. ize a model in this specific regime. We should also
+note that such initialization does not prevent cross-
+
+The important addition in this scenario to the classical ing the boundary between basins of attraction, which,
+high curvature valley, is that we assume that the val- as shown, could happen even though no bifurcation
+ley is wide, as we have a large region around the wall boundary is crossed.
+where if we land we can rely on first order methods
+to move towards the local minima. This is why just Teacher forcing is a more interesting, yet a not very
+
+clipping the gradient might be sufficient, not requiring well understood solution. It can be seen as a way of
+
+the use a second order method. Note that this algo- initializing the model in the right regime and the right
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+region of space. It has been shown that in practice xk = αxk−1 + (1− α)σ(Wrecxk−1 + Winuk + b).
+it can reduce the chance that gradients explode, and
+
+While these units can be used to solve the standard
+even allow training generator models or models that
+
+benchmark proposed by Hochreiter and Schmidhu-
+work with unbounded amounts of memory(Pascanu
+
+ber (1997) for learning long term dependencies (see
+and Jaeger, 2011; Doya and Yoshizawa, 1991). One
+
+(Jaeger, 2012)), they are more suitable to deal with
+important downside is that it requires a target to be
+
+low frequency information as they act as a low pass
+defined at every time step.
+
+filter. Because most of the weights are randomly sam-
+In Hochreiter and Schmidhuber (1997); Graves et al. pled, is not clear what size of models one would need
+(2009) a solution is proposed for the vanishing gra- to solve complex real world tasks.
+dients problem, where the structure of the model is
+
+We would make a final note about the approach pro-
+changed. Specifically it introduces a special set of
+
+posed by Tomas Mikolov in his PhD thesis (Mikolov,
+units called LSTM units which are linear and have a
+
+2012)(and implicitly used in the state of the art re-
+recurrent connection to itself which is fixed to 1. The
+
+sults on language modelling (Mikolov et al., 2011)).
+flow of information into the unit and from the unit is
+
+It involves clipping the gradient’s temporal compo-
+guarded by an input and output gates (their behaviour
+
+nents element-wise (clipping an entry when it exceeds
+is learned). There are several variations of this basic
+
+in absolute value a fixed threshold). Clipping has been
+structure. This solution does not address explicitly the
+
+shown to do well in practice and it forms the backbone
+exploding gradients problem.
+
+of our approach.
+Sutskever et al. (2011) use the Hessian-Free opti-
+mizer in conjunction with structural damping, a spe- 3.2. Scaling down the gradients
+
+cific damping strategy of the Hessian. This approach As suggested in section 2.3, one simple mechanism to
+seems to deal very well with the vanishing gradient, deal with a sudden increase in the norm of the gradi-
+though more detailed analysis is still missing. Pre- ents is to rescale them whenever they go over a thresh-
+sumably this method works because in high dimen- old (see algorithm 1).
+sional spaces there is a high probability for long term
+
+Algorithm 1 Pseudo-code for norm clipping the gra-
+components to be orthogonal to short term ones. This
+
+dients whenever they explode
+would allow the Hessian to rescale these components
+
+ĝ← ∂E
+independently. In practice, one can not guarantee that ∂θ
+
+this property holds. As discussed in section 2.3, this if ‖ĝ‖ ≥ threshold then
+ĝ← threshold
+
+method is able to deal with the exploding gradient ‖ĝ‖ ĝ
+
+as well. Structural damping is an enhancement that end if
+
+forces the change in the state to be small, when the pa- This algorithm is very similar to the one proposed by
+rameter changes by some small value ∆θ. This asks for Tomas Mikolov and we only diverged from the original
+the Jacobian matrices ∂xt
+
+∂θ to have small norm, hence proposal in an attempt to provide a better theoretical
+further helping with the exploding gradients problem. foundation (ensuring that we always move in a de-
+The fact that it helps when training recurrent neural scent direction with respect to the current mini-batch),
+models on long sequences suggests that while the cur- though in practice both variants behave similarly.
+vature might explode at the same time with the gradi-
+ent, it might not grow at the same rate and hence not The proposed clipping is simple to implement and
+be sufficient to deal with the exploding gradient. computationally efficient, but it does however in-
+
+troduce an additional hyper-parameter, namely the
+Echo State Networks (Lukoševičius and Jaeger, 2009) threshold. One good heuristic for setting this thresh-
+avoid the exploding and vanishing gradients problem old is to look at statistics on the average norm over
+by not learning the recurrent and input weights. They a sufficiently large number of updates. In our ex-
+are sampled from hand crafted distributions. Because periments we have noticed that for a given task and
+usually the largest eigenvalue of the recurrent weight model size, training is not very sensitive to this hyper-
+is, by construction, smaller than 1, information fed in parameter and the algorithm behaves well even for
+to the model has to die out exponentially fast. This rather small thresholds.
+means that these models can not easily deal with long
+term dependencies, even though the reason is slightly The algorithm can also be thought of as adapting
+different from the vanishing gradients problem. An the learning rate based on the norm of the gradient.
+extension to the classical model is represented by leaky Compared to other learning rate adaptation strate-
+integration units (Jaeger et al., 2007), where gies, which focus on improving convergence by col-
+
+lecting statistics on the gradient (as for example in
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+Duchi et al. (2011), or Moreira and Fiesler (1995) for direction of the error ∂E
+∂x , not for any direction (i.e.
+
+k+1
+an overview), we rely on the instantaneous gradient. we do not enforce that all eigenvalues are close to 1).
+This means that we can handle very abrupt changes The second observation is that we are using a soft con-
+in norm, while the other methods would not be able straint, therefore we are not ensured the norm of the
+to do so. error signal is preserved. If it happens that these Jaco-
+
+bian matrices are such that the norm explodes (as t−k
+3.3. Vanishing gradient regularization
+
+increases), then this could lead to the exploding gradi-
+We opt to address the vanishing gradients problem us- ents problem and we need to deal with it for example
+ing a regularization term that represents a preference as described in section 3.2. This can be seen from
+for parameter values such that back-propagated gra- the dynamical systems perspective as well: preventing
+dients neither increase or decrease too much in mag- vanishing gradients implies that we are pushing the
+nitude. Our intuition is that increasing the norm of model such that it is further away from the attrac-
+∂xt
+∂x means the error at time t is more sensitive to all
+
+k tor (such that it does not converge to it, case in which
+inputs ut, ..,uk ( ∂xt∂x is a factor in ∂Et
+
+∂u ). In practice the gradients vanish) and closer to boundaries between
+k k
+
+some of these inputs will be irrelevant for the predic- basins of attractions, making it more probable for the
+tion at time t and will behave like noise that the net- gradients to explode.
+work needs to learn to ignore. The network can not
+learn to ignore these irrelevant inputs unless there is 4. Experiments and Results
+an error signal. These two issues can not be solved in 4.1. Pathological synthetic problems
+parallel, and it seems natural to expect that we need
+to force the network to increase the norm of ∂xt
+
+∂x at the As done in Martens and Sutskever (2011), we address
+k the pathological problems proposed by Hochreiter and
+
+expense of larger errors (caused by the irrelevant input
+Schmidhuber (1997) that require learning long term
+
+entries) and then wait for it to learn to ignore these
+correlations. We refer the reader to this original pa-
+
+irrelevant input entries. This suggest that moving to-
+per for a detailed description of the tasks and to the
+
+wards increasing the norm of ∂xt
+∂x can not be always
+
+k supplementary materials for the complete description
+done while following a descent direction of the error E
+
+of the experimental setup.
+(which is, for e.g., what a second order method would
+try to do), and therefore we need to enforce it via a 4.1.1. The Temporal Order problem
+regularization term.
+
+We consider the temporal order problem as the pro-
+The regularizer we propose below prefers solutions for totypical pathological problem, extending our results
+which the error signal preserves norm as it travels back to the other proposed tasks afterwards. The input is
+in time: a long stream of discrete symbols. At two points in
+
+∑ ∑∥ time (in the beginning and middle of the sequence) a
+symbol within {A,B} is emitted. The task consists in
+
+Ω Ω ∥∥
+∥ 
+
+∥∂E ∂xk+1 ∥
+∂x∥k+1 ∂x ∥ 2
+
+k
+= k = ∥ ∥ − 1
+
+∂E ∥  classifying the order (either AA,AB,BA,BB) at the
+k k ∂x ∥ (9)
+
+k+1 end of the sequence.
+
+In order to be computationally efficient, we only use Fig. 7 shows the success rate of standard SGD, SGD-C
+the “immediate” partial derivative of Ω with respect to (SGD enhanced with out clipping strategy) and SGD-
+Wrec (we consider that xk and ∂E
+
+∂x as being constant CR (SGD with the clipping strategy and the regular-
+k+1
+
+with respect to Wrec when computing the derivative ization term). Note that for sequences longer than 20,
+of Ωk), as depicted in equation (10). Note we use the the vanishing gradients problem ensures that neither
+parametrization of equation (11). This can be done ef- SGD nor SGD-C algorithms can solve the task. The
+ficiently because we get the values of ∂E
+
+∂x from BPTT. x-axis is on log scale.
+k
+
+We use Theano to compute these gradients (Bergstra
+This task provides empirical evidence that exploding
+
+et al., 2010; Bast∑ien et al., 2012).
+gradients are linked with tasks that require long mem-
+ory traces. We know that initially the model oper-
+
+∂+Ω = ∂+Ωk
+∂Wrec k ∂Wre∥∥c ∥
+
+∑ ∥∥ 
+E ∥ ates in the one-attractor regime (i.e. λ1 < 1), in
+
+∂x which the amount of memory is controlled by λ1. More
+∂+ ∂ W∥ Tk+1 ∥ recdiag∥∥(σ
+
+′(xk))∥∥ 2
+
+∥∥ ∥∥ −1
+∂E
+
+∂x memory means larger spectral radius, and, when this
+= k+1
+
+k ∂Wrec value crosses a certain threshold the model enters rich
+(10) regimes where gradients are likely to explode. We see
+
+Note that our regularization term only forces the Ja-
+in Fig. 7 that as long as the vanishing gradient prob-
+
+cobian matrices ∂xk+1
+∂x to preserve norm in the relevant
+
+k
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+Table 1. Results on polyphonic music prediction in nega-
+1.0 tive log likelihood per time step. Lower is better.
+
+0.8 Data
+Data set SGD SGD+C SGD+CR
+
+fold
+0.6 Piano- train 6.87 6.81 7.01
+
+midi.de test 7.56 7.53 7.46
+0.4
+
+Nottingham train 3.67 3.21 3.24
+test 3.80 3.48 3.46
+
+0.2
+
+SGD-C MuseData train 8.25 6.54 6.51
+SGD
+
+0.0 test 7.11 7.00 6.99
+SGD-CR
+
+2.0 2.5 3.0 3.5 4.0 4.5 5.0 5.5
+Log of sequence length Table 2. Results on the next character prediction task in
+
+Figure 7. Rate of success for solving the temporal order entropy (bits/character)
+
+problem versus log of sequence length. See text. Data
+Data set SGD SGD+C SGD+CR
+
+fold
+1 step train 1.46 1.34 1.36
+
+test 1.50 1.42 1.41
+5 steps train N/A 3.76 3.70
+
+lem does not become an issue, addressing the explod- test N/A 3.89 3.74
+
+ing gradients problem ensures a better success rate. 4.2. Natural problems
+
+When combining clipping as well as the regularization We address the task of polyphonic music prediction,
+term proposed in section 3.3, we call this algorithm using the datasets Piano-midi.de, Nottingham and
+SGD-CR. SGD-CR solved the task with a success rate MuseData described in Boulanger-Lewandowski et al.
+of 100% for sequences up to 200 steps (the maximal (2012) and language modelling at the character level
+length used in Martens and Sutskever (2011)). Fur- on the Penn Treebank dataset (Mikolov et al., 2012).
+thermore, we can train a single model to deal with We also explore a modified version of the task, where
+any sequence of length 50 up to 200 (by providing se- we ask the model to predict the 5th character in the
+quences of different lengths for different SGD steps). future (instead of the next). Our assumption is that
+Interestingly enough, the trained model can gen- to solve this modified task long term correlations are
+eralize to new sequences that can be twice as more important than short term ones, and hence our
+long as the ones seen during training. regularization term should be more helpful.
+
+4.1.2. Other pathological tasks The training and test scores reported in Table 1 are
+
+SGD-CR was also able to solve (100% success on the average negative log likelihood per time step. We fixed
+
+lengths listed below, for all but one task) other patho- hyper-parameters across the three runs, except for
+
+logical problems proposed in Hochreiter and Schmid- the regularization factor and clipping cutoff threshold.
+
+huber (1997), namely the addition problem, the mul- SGD-CR provides a statistically significant im-
+
+tiplication problem, the 3-bit temporal order prob- provement on the state-of-the-art for RNNs on
+
+lem, the random permutation problem and the noise- all the polyphonic music prediction tasks except
+
+less memorization problem in two variants (when the for MuseData on which we get exactly the same per-
+
+pattern needed to be memorized is 5 bits in length formance as the state-of-the-art (Bengio et al., 2012),
+
+and when it contains over 20 bits of information; see which uses a different architecture. Table 2 contains
+
+Martens and Sutskever (2011)). For the first 4 prob- the results on language modelling (in bits per letter).
+
+lems we used a single model for lengths up to 200, These results suggest that clipping the gradients solves
+while for the noiseless memorization we used a dif- an optimization issue and does not act as a regular-
+ferent model for each sequence length (50, 100, 150 izer, as both the training and test error improve in
+and 200). The hardest problems for which only one general. Results on Penn Treebank reach the state of
+trail out of 8 succeeded was the random permutation the art achieved by Mikolov et al. (2012), who used a
+problem. In all cases, we observe successful generaliza- different clipping algorithm similar to ours, thus pro-
+tion to sequences longer than the training sequences. viding evidence that both behave similarly. The reg-
+In most cases, these results outperforms Martens and ularized model performs as well as the Hessian-Free
+Sutskever (2011) in terms of success rate, they deal trained model.
+with longer sequences than in Hochreiter and Schmid-
+huber (1997) and compared to (Jaeger, 2012) they gen- By employing the proposed regularization term we are
+
+eralize to longer sequences. able to improve test error even on tasks that are not
+
+Rate of success
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+dominated by long term contributions. and GPU math expression compiler. In Proceedings
+of the Python for Scientific Computing Conference
+
+5. Summary and Conclusions (SciPy). Oral Presentation.
+We provided different perspectives through which one
+can gain more insight into the exploding and vanishing Boulanger-Lewandowski, N., Bengio, Y., and Vincent,
+
+gradients issue. To deal with the exploding gradients P. (2012). Modeling temporal dependencies in high-
+
+problem, we propose a solution that involves clipping dimensional sequences: Application to polyphonic
+
+the norm of the exploded gradients when it is too large. music generation and transcription. In Proceed-
+
+The algorithm is motivated by the assumption that ings of the Twenty-nine International Conference on
+
+when gradients explode, the curvature and higher or- Machine Learning (ICML’12). ACM.
+
+der derivatives explode as well, and we are faced with Doya, K. (1993). Bifurcations of recurrent neural net-
+a specific pattern in the error surface, namely a val- works in gradient descent learning. IEEE Transac-
+ley with a single steep wall. In order to deal with tions on Neural Networks, 1, 75–80.
+the vanishing gradient problem we use a regulariza-
+tion term that forces the error signal not to vanish as Doya, K. and Yoshizawa, S. (1991). Adaptive synchro-
+it travels back in time. This regularization term forces nization of neural and physical oscillators. In J. E.
+the Jacobian matrices ∂xi
+
+∂x to preserve norm only in Moody, S. J. Hanson, and R. Lippmann, editors,
+i−1
+
+relevant directions. In practice we show that these so- NIPS , pages 109–116. Morgan Kaufmann.
+lutions improve performance on both the pathological
+synthetic datasets considered as well as on polyphonic Duchi, J. C., Hazan, E., and Singer, Y. (2011). Adap-
+
+music prediction and language modelling. tive subgradient methods for online learning and
+stochastic optimization. Journal of Machine Learn-
+
+Acknowledgements ing Research, 12, 2121–2159.
+
+We would like to thank the Theano development team Elman, J. (1990). Finding structure in time. Cognitive
+as well (particularly to Frederic Bastien, Pascal Lam- Science, 14(2), 179–211.
+blin and James Bergstra) for their help.
+
+Graves, A., Liwicki, M., Fernandez, S., Bertolami, R.,
+We acknowledge NSERC, FQRNT, CIFAR, RQCHP
+
+Bunke, H., and Schmidhuber, J. (2009). A Novel
+and Compute Canada for the resources they provided.
+
+Connectionist System for Unconstrained Handwrit-
+ing Recognition. IEEE Transactions on Pattern
+
+References Analysis and Machine Intelligence, 31(5), 855–868.
+
+Bastien, F., Lamblin, P., Pascanu, R., Bergstra, J., Hochreiter, S. and Schmidhuber, J. (1997). Long
+Goodfellow, I., Bergeron, A., Bouchard, N., and short-term memory. Neural Computation, 9(8),
+Bengio, Y. (2012). Theano: new features and speed 1735–1780.
+improvements. Submited to Deep Learning and Un-
+supervised Feature Learning NIPS 2012 Workshop. Jaeger, H. (2012). Long short-term memory in echo
+
+state networks: Details of a simulation study. Tech-
+Bengio, Y., Frasconi, P., and Simard, P. (1993). The nical report, Jacobs University Bremen.
+
+problem of learning long-term dependencies in re-
+current networks. pages 1183–1195, San Francisco. Jaeger, H., Lukosevicius, M., Popovici, D., and Siew-
+IEEE Press. (invited paper). ert, U. (2007). Optimization and applications of
+
+echo state networks with leaky- integrator neurons.
+Bengio, Y., Simard, P., and Frasconi, P. (1994). Learn- Neural Networks, 20(3), 335–352.
+
+ing long-term dependencies with gradient descent is
+difficult. IEEE Transactions on Neural Networks, Lukoševičius, M. and Jaeger, H. (2009). Reservoir
+5(2), 157–166. computing approaches to recurrent neural network
+
+training. Computer Science Review , 3(3), 127–149.
+Bengio, Y., Boulanger-Lewandowski, N., and Pascanu,
+
+R. (2012). Advances in optimizing recurrent net- Martens, J. and Sutskever, I. (2011). Learning recur-
+works. Technical Report arXiv:1212.0901, U. Mon- rent neural networks with Hessian-free optimization.
+treal. In Proc. ICML’2011 . ACM.
+
+Bergstra, J., Breuleux, O., Bastien, F., Lamblin, P., Mikolov, T. (2012). Statistical Language Models based
+Pascanu, R., Desjardins, G., Turian, J., Warde- on Neural Networks. Ph.D. thesis, Brno University
+Farley, D., and Bengio, Y. (2010). Theano: a CPU of Technology.
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+Mikolov, T., Deoras, A., Kombrink, S., Burget, L., Analytical analysis of the exploding
+and Cernocky, J. (2011). Empirical evaluation and and vanishing gradients problem
+combination of advanced language modeling tech-
+niques. In Proc. 12th annual conference of the in-
+ternational speech communication association (IN- xt = Wrecσ(xt−1) + Winut + b (11)
+TERSPEECH 2011). +
+
+Let us consider the term gT Et ∂xt ∂ xk
+k = ∂
+
+∂x ∂x ∂θ for the
+t k
+
+Mikolov, T., Sutskever, I., Deoras, A., Le, H.-S., linear version of the parametrization in equation (11)
+Kombrink, S., and Cernocky, J. (2012). Subword (i.e. set σ to the identity function) and assume t goes
+language modeling with neural networks. preprint to infinity and l = t− k. We have that:
+(http://www.fit.vutbr.cz/ imikolov/rnnlm/char.pdf).
+
+∂xt ( )l
+Moreira, M. and Fiesler, E. (1995). Neural net- = WT
+
+∂x rec (12)
+k
+
+works with adaptive learning rate and momentum
+terms. Idiap-RR Idiap-RR-04-1995, IDIAP, Mar- By employ
+tigny, Switzerland. )ing a generic power iteration method based
+
+proof we can show that, given certain conditions,
+∂E (t
+
+Pascanu, R. and Jaeger, H. (2011). A neurodynamical ∂x WT l
+rec grows exponentially.
+
+t
+
+model for working memory. Neural Netw., 24, 199– Proof Let Wrec have the eigenvalues λ1, .., λn with
+207. |λ1| > |λ2| > .. > |λn| and the corresponding eigen-
+
+vectors q
+Rumelhart, D. E., Hinton, G. E., and Williams, 1,q2, ..,qn which form a vector basis. We can
+
+now write the row vector ∂Et
+R. J. (1986). Learning representations by back- ∂x into this basis:
+
+t
+
+propagating errors. Nature, 323(6088), 533–536. ∂E ∑
+t N T
+
+∂x =
+t i=1 ciqi
+
+Strogatz, S. (1994). Nonlinear Dynamics And Chaos: If j is such that
+With Applications To Physics, Biology, Chemistry, (cj 6= 0)and any j′ < j, cj′ = 0, using
+
+the fact that qT T l l
+
+And Engineering (Studies in Nonlinearity). Studies i Wrec = λiq
+T
+i we have that
+
+in nonlinearity. Perseus Books Group, 1 edition.
+∂E ∑n
+
+t ∂xt λl
+= c T i T l
+
+jλ
+l
+
+i q qT
+Sutskever, I., Martens, J., and Hinton, G. (2011). ∂x jqj + λlj c
+
+t ∂xk λl i ≈ cjλj j (13)
+i=j+1 j
+
+Generating text with recurrent neural networks. In
+L. Getoor and T. Scheffer, editors, Proceedings of the
+28th International Conference on Machine Learning We used the ∣ ∣
+
+fact that ∣ ∣ ∣
+λi/ ∣
+λ < 1 for i > j, which
+j
+
+(ICML-11), ICML ’11, pages 1017–1024, New York, means that lim λi
+l→∞ ∣ / ∣l
+
+λj = 0. If |λj | > 1, it follows
+NY, USA. ACM. that ∂xt
+
+∂x grows exponentially fast with l, and it does
+k
+
+so along the direction q
+Werbos, P. J. (1988). Generalization of backpropa- j . 
+
+gation with application to a recurrent gas market The proof assumes Wrec is diagonalizable for simplic-
+model. Neural Networks, 1(4), 339–356. ity, though using the Jordan normal form of Wrec one
+
+can extend this proof by considering not just the eigen-
+vector of largest eigenvalue but the whole subspace
+spanned by the eigenvectors sharing the same (largest)
+eigenvalue.
+
+This result provides a necessary condition for gradients
+to grow, namely that the spectral radius (the absolute
+value of the largest eigenvalue) of Wrec must be larger
+than 1.
+
++
+If qj is not in the null space of ∂ xk
+
+∂θ the entire temporal
+component grows exponentially with l. This approach
+extends easily to the entire gradient. If we re-write it
+in terms of the eigen-decomposition of W), we get:
+
+∑(
+n
+
+∂E ∑t
+t
+
+= c T ∂
++xk
+
+jλ
+t−k
+
+∂θ j qj (14)
+∂θ
+
+j=1 i=k
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+We can now pick j and k such that cjq
+T ∂
+
++xk
+j ∂θ does not steps. Hochreiter and Schmidhuber (1997) only con-
+
+have 0 norm, while maximizing |λj |. If for the chosen siders sequences up to 100 steps. Jaeger (2012) also
+j it holds that |λj | > 1 then λt−k ∂+
+
+j cjq
+T xk
+j ∂θ will dom- addresses this task with 100% success rate, though the
+
+inate the sum and because this term grows exponen- solution does not seem to generalize well as it relies on
+tially fast to infinity with t, the same will happen to very large output weights, which for ESNs are usually
+the sum. a sign of instability. We use a single model to deal
+
+with all lengths of sequences (50, 100, 150 200), and
+the trained model generalizes to new sequences that
+
+Experimental setup can be up 400 steps (while the error is still under 1%).
+
+Note that all hyper-parameters where selected based
+on their performance on a validation set using a grid Multiplication problem
+
+search. This task is similar to the problem above, just that
+the predicted value is the product of the random num-
+
+The pathological synthetic tasks bers instead of the sum. We used the same hyper-
+
+Similar success criteria is used in all of the tasks be- parameters as for the previous case, and obtained very
+
+low (borrowed from Martens and Sutskever (2011)), similar results.
+
+namely that the model should make no more than 1%
+error on a batch of 10000 test samples. In all cases, Temporal order problem
+
+discrete symbols are depicted by a one-hot encoding, For the temporal order the length of the sequence is
+and in case of regression a prediction for a given se- fixed to T , We have a fixed set of two symbols {A,B}
+quence is considered as a success if the error is less and 4 distractor symbols {c, d, e, f}. The sequence en-
+than 0.04. tries are uniformly sampled from the distractor sym-
+
+bols everywhere except at two random positions, the
+Addition problem first position sampled from [ T10 ,
+
+2T
+10 ], while the second
+
+The input consists of a sequence of random numbers, from [ 4T
+10 ,
+
+5T
+10 ]. The task is to predict the order in which
+
+where two random positions (one in the beginning the non-distractor symbols were provided, i.e. either
+
+and one in the middle of the sequence) are marked. {AA,AB,BA,BB}.
+The model needs to predict the sum of the two ran- We use a 50 hidden units model, with a learning rate of
+dom numbers after the entire sequence was seen. For .001 and α, the regularization coefficient, set to 2. The
+each generated sequence we sample the length T ′ from cut-off threshold for clipping the norm of the gradient
+[T, 11
+
+10T ], though for clarity we refer to T as the length is left to 6. As for the other two task we have a 100%
+of the sequence in the paper. The first position is sam- success rate at training a single model to deal with
+pled from [1, T
+
+′
+
+10 ], while the second position is sampled sequences between 50 to 200 steps. This outperforms
+from [T
+
+′
+
+10 ,
+T ′
+2 ]. These positions i, j are marked in a dif- the previous state of the art because of the success
+
+ferent input channel that is 0 everywhere except for the rate, but also the single model generalizes to longer
+two sampled positions when it is 1. The model needs sequences (up to 400 steps).
+to predict the sum of the random numbers found at
+the sampled positions i, j divided by 2. 3-bit temporal order problem
+
+To address this problem we use a 50 hidden units Similar to the previous one, except that we have 3
+model, with a tanh activation function. The learn- random positions, first sampled from [ T10 ,
+
+2T
+10 ], second
+
+ing rate is set to .01 and the factor α in front of the from [ 3T
+10 ,
+
+4T
+10 ] and last from [ 6T
+
+10 ,
+7T
+10 ].
+
+regularization term is 0.5. We use clipping with a cut-
+off threshold of 6 on the norm of the gradients. The We use similar hyper-parameters as above, but that
+
+weights are initialized from a normal distribution with we increase the hidden layer size to 100 hidden units.
+
+mean 0 and standard derivation .1. As before we outperform the state of the art while
+training a single model that is able to generalize to
+
+The model is trained on sequences of varying length new sequence lengths.
+T between 50 and 200. We manage to get a success
+rate of 100% at solving this task, which outperforms Random permutation problem
+the results presented in Martens and Sutskever (2011)
+(using Hessian Free), where we see a decline in success In this case we have a dictionary of 100 symbols. Ex-
+
+rate as the length of the sequence gets closer to 200 cept the first and last position which have the same
+value sampled from {1, 2} the other entries are ran-
+
+
+
+On the difficulty of training Recurrent Neural Networks
+
+domly picked from [3, 100]. The task is to do next Language modelling
+symbol prediction, though the only predictable sym-
+
+For the language modelling task we used a 500 sig-
+bol is the last one.
+
+moidal hidden units model with no biases (Mikolov
+We use a 100 hidden units with a learning rate of .001 et al., 2012). The model is trained over sequences of
+and α, the regularization coefficient, set to 1. The 200 steps, where the hidden state is carried over from
+cutoff threshold is left to 6. This task turns out to be one step to the next one.
+more difficult to learn, and only 1 out of 8 experiments
+
+We use a cut-off threshold of 45 (though we take the
+succeeded. As before we use a single model to deal
+
+sum of the cost over the sequence length) for all ex-
+with multiple values for T (from 50 to 200 units).
+
+periments. For next character prediction we have a
+learning rate of 0.01 when using clipping with no reg-
+
+Noiseless memorization problem
+ularization term, 0.05 when we add the regularization
+
+For the noiseless memorization we are presented with term and 0.001 when we do not use clipping. When
+a binary pattern of length 5, followed by T steps of predicting the 5th character in the future we use a
+constant value. After these T steps the model needs learning rate of 0.05 with the regularization term and
+to generate the pattern seen initially. We also con- 0.1 without it.
+sider the extension of this problem from Martens and
+
+The regularization factor α for next character predic-
+Sutskever (2011), where the pattern has length 10, and
+
+tion was set to .01 and kept constant, while for the
+the symbol set has cardinality 5 instead of 2.
+
+modified task we used an initial value of 0.05 with a 1
+t
+
+We manage a 100% success rate on these tasks, though schedule.
+we train a different model for the 5 sequence lengths
+considered (50, 100, 150, 200).
+
+Natural Tasks
+
+Polyphonic music prediction
+
+We train our model, a sigmoid units RNN, on se-
+quences of 200 steps. The cut-off coefficient thresh-
+old is the same in all cases, namely 8 (note that one
+has to take the mean over the sequence length when
+computing the gradients).
+
+In case of the Piano-midi.de dataset we use 300 hid-
+den units and an initial learning rate of 1.0 (whir the
+learning rate halved every time the error over an epoch
+increased instead of decreasing). For the regularized
+model we used a initial value for regularization coef-
+ficient α of 0.5, where α follows a 1/t schedule, i.e.
+αt = 1
+
+2t (where t measures the number of epochs).
+
+For the Nottingham dataset we used the exact same
+setup. For MuseData we increased the hidden layer to
+400 hidden units. The learning rate was also decreased
+to 0.5. For the regularized model, the initial value for
+α was 0.1, and αt = 1
+
+t .
+
+We make the observation that for natural tasks it
+seems useful to use a schedule that decreases the reg-
+ularization term. We assume that the regularization
+term forces the model to focus on long term correla-
+tions at the expense of short term ones, so it may be
+useful to have this decaying factor in order to allow
+the model to make better use of the short term infor-
+mation.

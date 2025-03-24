@@ -1,0 +1,822 @@
+﻿Latent Retrieval for Weakly Supervised
+Open Domain Question Answering
+
+Kenton Lee Ming-Wei Chang Kristina Toutanova
+Google Research
+
+Seattle, WA
+{kentonl,mingweichang,kristout}@google.com
+
+Abstract et al., 2017), SearchQA (Dunn et al., 2017), and
+Quasar (Dhingra et al., 2017), the dependency on
+
+Recent work on open domain question answer-
+ing (QA) assumes strong supervision of the strong supervision is removed by assuming that
+supporting evidence and/or assumes a black- the IR system provides noisy gold evidence.
+box information retrieval (IR) system to re- These approaches rely on the IR system to mas-
+trieve evidence candidates. We argue that both sively reduce the search space and/or reduce spu-
+are suboptimal, since gold evidence is not al- rious ambiguity. However, QA is fundamentally
+ways available, and QA is fundamentally dif- different from IR (Singh, 2012). Whereas IR is
+ferent from IR. We show for the first time that concerned with lexical and semantic matching,
+it is possible to jointly learn the retriever and
+reader from question-answer string pairs and questions are by definition under-specified and re-
+without any IR system. In this setting, evi- quire more language understanding, since users
+dence retrieval from all of Wikipedia is treated are explicitly looking for unknown information.
+as a latent variable. Since this is impracti- Instead of being subject to the recall ceiling from
+cal to learn from scratch, we pre-train the re- blackbox IR systems, we should directly learn to
+triever with an Inverse Cloze Task. We evalu- retrieve using question-answering data.
+ate on open versions of five QA datasets. On In this work, we introduce the first Open-
+datasets where the questioner already knows
+the answer, a traditional IR system such as Retrieval Question Answering system (ORQA).
+BM25 is sufficient. On datasets where a ORQA learns to retrieve evidence from an open
+user is genuinely seeking an answer, we show corpus, and is supervised only by question-
+that learned retrieval is crucial, outperforming answer string pairs. While recent work on im-
+BM25 by up to 19 points in exact match. proving evidence retrieval has made significant
+
+1 Introduction progress (Wang et al., 2018; Kratzwald and Feuer-
+riegel, 2018; Lee et al., 2018; Das et al., 2019),
+
+Due to recent advances in reading comprehension they still only rerank a closed evidence set. The
+systems, there has been a revival of interest in main challenge to fully end-to-end learning is that
+open domain question answering (QA), where the retrieval over the open corpus must be considered
+evidence must be retrieved from an open corpus, a latent variable that would be impractical to train
+rather than being given as input. This presents a from scratch. IR systems offer a reasonable but
+more realistic scenario for practical applications. potentially suboptimal starting point.
+
+Current approaches require a blackbox informa- The key insight of this work is that end-to-
+tion retrieval (IR) system to do much of the heavy end learning is possible if we pre-train the re-
+lifting, even though it cannot be fine-tuned on the triever with an unsupervised Inverse Cloze Task
+downstream task. In the strongly supervised set- (ICT). In ICT, a sentence is treated as a pseudo-
+ting popularized by DrQA (Chen et al., 2017), question, and its context is treated as pseudo-
+they also assume a reading comprehension model evidence. Given a pseudo-question, ICT requires
+trained on question-answer-evidence triples, such selecting the corresponding pseudo-evidence out
+as SQuAD (Rajpurkar et al., 2016). The IR sys- of the candidates in a batch. ICT pre-training
+tem is used at test time to generate evidence candi- provides a sufficiently strong initialization such
+dates in place of the gold evidence. In the weakly that ORQA, a joint retriever and reader model,
+supervised setting, proposed by TriviaQA (Joshi can be fine-tuned end-to-end by simply optimiz-
+
+arXiv:1906.00300v3  [cs.CL]  27 Jun 2019
+
+
+
+Task Training Evaluation
+Evidence Answer Evidence Answer Example
+
+Reading Comprehension given span given string SQuAD (Rajpurkar et al., 2016)
+Open-domain QA
+
+Unsupervised QA none none none string GPT-2 (Radford et al., 2019)
+Strongly Supervised QA given span heuristic string DrQA (Chen et al., 2017)
+Weakly Supervised QA
+
+Closed Retrieval QA heuristic string heuristic string TriviaQA (Joshi et al., 2017)
+Open Retrieval QA learned string learned string ORQA (this work)
+
+Table 1: Comparison of assumptions made by related tasks, along with references to examples. Heuristic evidence
+refers to the typical strategy of considering only a closed set of evidence documents from a traditional IR system,
+which sets a strict upper-bound on task performance. In this work (ORQA), only question-answer string pairs are
+observed during training, and evidence retrieval is learned in a completely end-to-end manner.
+
+ing the marginal log-likelihood of correct answers Models are defined with respect to an unstruc-
+that were found. tured text corpus that is split into B blocks of ev-
+
+We evaluate ORQA on open versions of five ex- idence texts. An answer derivation is a pair (b, s),
+isting QA datasets. On datasets where the question where 1 ≤ b ≤ B indicates the index of an ev-
+writers already know the answer—SQuAD (Ra- idence block and s denotes a span of text within
+jpurkar et al., 2016) and TriviaQA (Joshi et al., block b. The start and end token indices of span s
+2017)—the retrieval problem resembles tradi- are denoted by START(s) and END(s) respectively.
+tional IR, and BM25 (Robertson et al., 2009) Models define a scoring function S(b, s, q) indi-
+provides state-of-the-art retrieval. On datasets cating the goodness of an answer derivation (b, s)
+where question writers do not know the answer— given a question q. Typically, this scoring func-
+Natural Questions (Kwiatkowski et al., 2019), tion is decomposed over a retrieval component
+WebQuestions (Berant et al., 2013), and Curat- Sretr (b, q) and a reader component Sread (b, s, q):
+edTrec (Baudis and Sedivý, 2015)—we show that
+
+S(b, s, q) = Sretr (b, q) + S
+learned retrieval is crucial, providing improve- read (b, s, q)
+
+ments of 6 to 19 points in exact match over BM25. During inference, the model outputs the answer
+string of the highest scoring derivation:
+
+2 Overview
+a∗ = TEXT(argmaxS(b, s, q))
+
+In this section, we introduce notation for open do- b,s
+
+main QA that is useful for comparing prior work, where TEXT(b, s) deterministically maps answer
+baselines, and our proposed model. derivation (b, s) to an answer string. A major chal-
+
+lenge of any open domain question answering sys-
+2.1 Task tem is handling the scale. In our experiments on
+In open domain question answering, the input q is the English Wikipedia corpus, we consider over
+a question string, and the output a is an answer 13 million evidence blocks b, each with over 2000
+string. Unlike reading comprehension, the source possible answer spans s.
+of evidence is a modeling choice rather than a part
+of the task definition. We compare the assump- 2.3 Existing Pipelined Models
+tions made by variants of reading comprehension In existing retrieval-based open domain question
+and question answering tasks in Table 1. answering systems, a blackbox IR system first
+
+Evaluation is exact match with any of the ref- chooses a closed set of evidence candidates. For
+erence answer strings after minor normalization example, the score from the retriever component
+such as lowercasing, following evaluation scripts of DrQA (Chen{et al., 2017) is defined as:
+from DrQA (Chen et al., 2017). 0 b ∈ TOP(k, TF-IDF(q, b))
+
+Sretr (b, q) =
+2.2 Formal Definitions −∞ otherwise
+
+We introduce several general definitions of model Most work following DrQA use the same candi-
+components that subsume many retrieval-based dates from TF-IDF and focus on reading compre-
+open domain question answering systems. hension or re-ranking. The reading component
+
+
+
+MLP
+S BERT ad (0, “The term”, q)
+retr (0, q) B(0) BERTR(q, 0)
+
+Sre
+
+[CLS]...The term ‘ZIP’ Top K [CLS] What does the
+is an acronym for Zone zip in zip code stand for? Sread (0, “Zone Improvement Plan”, q)
+
+Improvement Plan...[SEP] [SEP]...The term ‘ZIP’
+is an acronym for Zone
+
+BERT Improvement Plan...[SEP]
+S Sread (0, ..., q)
+retr (1, q) B(1)
+
+BERT (q) [CLS]...group of ze-
+Q
+
+bras are referred to as a
+[CLS]What does the zip in herd or dazzle...[SEP]
+zip code stand for?[SEP] MLP
+
+BERT Sread (2, “ZIPs”, q)
+R(q, 2)
+
+Sretr (2, q) BERTB(2)
+[CLS] What does the
+
+[CLS]...ZIPs for other Top K zip in zip code stand for? Sread (2, “operating systems”, q)
+operating systems may [SEP]...ZIPs for other
+
+be preceded by...[SEP] operating systems may
+be preceded by...[SEP] Sread (2, ..., q)
+
+Sretr (..., q) BERTB(...)
+
+...
+
+Figure 1: Overview of ORQA. A subset of all possible answer derivations given a question q is shown here.
+Retrieval scores Sretr (q, b) are computed via inner products between BERT-based encoders. Top-scoring evidence
+blocks are jointly encoded with the question, and span representations are scored with a multi-layer perceptron
+(MLP) to compute Sread(q, b, s). The final joint model score is Sretr (q, b) + Sread(q, b, s). Unlike previous work
+using IR systems for candidate proposal, we learn to retrieve from all of Wikipedia directly.
+
+Sread (b, s, q) is learned from gold answer deriva- The BERT function takes one or two string in-
+tions, typically from the SQuAD (Rajpurkar et al., puts (x1 and optionally x2) as arguments. It re-
+2016) dataset, where the evidence text is given. turns vectors corresponding to representations of
+
+In work that is more closely related to our ap- the CLS pooling token or the input tokens.
+proach, the reader is learned entirely from weak
+supervision (Joshi et al., 2017; Dhingra et al., Retriever component In order for the retriever
+2017; Dunn et al., 2017). Spurious ambiguities to be learnable, we define the retrieval score as
+(see Table 2) are heuristically removed by the re- the inner product of dense vector representations
+trieval system, and the cleaned results are treated of the question q and the evidence block b.
+as gold derivations. hq = WqBERTQ(q)[CLS]
+
+3 Open-Retrieval Question Answering hb = WbBERTB(b)[CLS]
+(ORQA) Sretr (b, q) = h>q hb
+
+We propose an end-to-end model where the re- where W
+triever and reader components are jointly learned, q and Wb are matrices that project the
+
+BERT output into 128-dimensional vectors.
+which we refer to as the Open-Retrieval Question
+Answering (ORQA) model. An important aspect Reader component The reader is a span-based
+of ORQA is its expressivity—it is capable of re- variant of the reading comprehension model pro-
+trieving any text in an open corpus, rather than be- posed in Devlin et al. (2018):
+ing limited to the closed set returned by a black-
+box IR system. An illustration of how ORQA hstart = BERTR(q, b)[START(s)]
+scores answer derivations is presented in Figure 1. hend = BERTR(q, b)[END(s)]
+
+Following recent advances in transfer learn- Sread (b, s, q) = MLP([hstart ;hend ])
+ing, all scoring components are derived from
+BERT (Devlin et al., 2018), a bidirectional trans- Following Lee et al. (2016), a span is represented
+former that has been pre-trained on unsupervised by the concatenation of its end points, which
+language-modeling data. We refer the reader to is scored by a multi-layer perceptron to enable
+the original paper for details of the architecture. start/end interaction.
+In this work, the relevant abstraction can be de-
+scribed by the following function: Inference & Learning Challenges The model
+
+described above is conceptually simple. However,
+BERT(x1, [x2]) = {CLS : hCLS, 1 : h1, 2 : h2, ...} inference and learning are challenging since (1) an
+
+P
+ML MLP
+
+MLP MLP
+
+
+
+Example Supportive Spurious Sretr (0, q) BERTB(0)
+
+Evidence Ambiguity
+[CLS]...Zebras have four
+
+Q: Who is ...invention of ...René gaits: walk, trot, canter
+
+credited with Cartesian Descartes and gallop. When chased,
+was a zebra will zig-zag from
+
+developing the XY coordinates by born in La Haye side to side... ...[SEP]
+coordinate plane? René Descartes en Touraine,
+A: René Descartes revolutionized... France... BERTQ(q) Sretr (1, q) BERTB(1)
+
+Q: How many ...Alabama is ...Alabama is [CLS]They are generally [CLS]...Gagarin was
+
+districts are in the currently divided one of seven slower than horses, but their further selected for an elite
+great stamina helps them training group known as
+
+state of Alabama? into seven states that levy a outrun predators.[SEP] the Sochi Six...[SEP]
+A: seven congressional tax on food at
+
+districts, each the same rate as Sretr (..., q) BERTB(...)
+represented by ... other goods... ...
+
+Table 2: Examples of spurious ambiguities arising from Figure 2: Example of the Inverse Cloze Task (ICT),
+the use of weak supervision. Good evidence retrieval is used for retrieval pre-training. A random sentence
+needed to generate a meaningful learning signal. (pseudo-query) and its context (pseudo evidence text)
+
+are derived from the text snippet: “...Zebras have four
+gaits: walk, trot, canter and gallop. They are gener-
+
+open evidence corpus presents an enormous search ally slower than horses, but their great stamina helps
+space (over 13 million evidence blocks), and (2) them outrun predators. When chased, a zebra will zig-
+how to navigate this space is entirely latent, so zag from side to side...” The objective is to select the
+standard teacher-forcing approaches do not apply. true context among candidates in the batch.
+Latent-variable methods are also difficult to ap-
+ply naively due to the large number of spuriously Figure 2). We use a discriminative objective that
+ambiguous derivations. For example, as shown is analogous to downstream retrieval:
+in Table 2, many irrelevant passages in Wikipedia
+would contain the answer string “seven.”
+
+PICT(b|q) = ∑exp(Sretr (b, q))
+We address these challenges by carefully initial- exp(Sretr (b
+
+′, q))
+izing the retriever with unsupervised pre-training b′∈BATCH
+(Section 4). The pre-trained retriever allows
+us to (1) pre-encode all evidence blocks from where q is a random sentence that is treated as a
+Wikipedia, enabling dynamic yet fast top-k re- pseudo-question, b is the text surrounding q, and
+trieval during fine-tuning (Section 5), and (2) bias BATCH is the set of evidence blocks in the batch
+the retrieval away from spurious ambiguities and that are used as sampled negatives.
+towards supportive evidence (Section 6). An important aspect of ICT is that it requires
+
+learning more than word matching features, since
+4 Inverse Cloze Task the pseudo-question is not present in the evi-
+
+dence. For example, the pseudo-question in Fig-
+The goal of our proposed pre-training procedure is ure 2 never explicitly mentions “Zebras”, but the
+for the retriever to solve an unsupervised task that retriever must still be able to select the context that
+closely resembles evidence retrieval for QA. discusses Zebras. Being able to infer the seman-
+
+Intuitively, useful evidence typically discusses tics from under-specified language is what sets QA
+entities, events, and relations from the question. It apart from traditional IR.
+also contains extra information (the answer) that However, we also do not want to dissuade
+is not present in the question. An unsupervised the retriever from learning to perform word
+analog of a question-evidence pair is a sentence- matching—lexical overlap is ultimately a very
+context pair—the context of a sentence is semanti- useful feature for retrieval. Therefore, we only
+cally relevant and can be used to infer information remove the sentence from its context in 90% of
+missing from the sentence. the examples, encouraging the model to learn
+
+Following this intuition, we propose to pre-train both abstract representations when needed and
+our retrieval module with an Inverse Cloze Task low-level word matching features when available.
+(ICT). In the standard Cloze task (Taylor, 1953),
+the goal is to predict masked-out text based on ICT pre-training accomplishes two main goals:
+its context. ICT instead requires predicting the
+inverse—given a sentence, predict its context (see 1. Despite the mismatch between sentences dur-
+
+
+
+ing pre-training and questions during fine- where a = TEXT(s) indicates whether the answer
+tuning, we expect zero-shot evidence re- string a matches exactly the span s.
+trieval performance to be sufficient for boot- To encourage more aggressive learning, we also
+strapping the latent-variable learning. include an early update, where we consider a
+
+larger set of c evidence blocks but only update the
+2. There is no such mismatch between pre- retrieval score, which is cheap to compute:
+
+trained evidence blocks and downstream ev-
+idence blocks. We can expect the block en-
+
+Pearly(b|q) = ∑exp(Sretr (b, q))
+coder BERTB(b) to work well without fur- exp(Sretr (b
+
+′, q))
+ther training. Only the question encoder b′∈TOP(c)
+needs to be fine-tuned on downstream data. ∑
+
+Learly(q, a) = − log Pearly(b|q)
+As we will see in the following section, these two b∈TOP(c), a∈TEXT(b)
+
+properties are crucial for enabling computationally
+feasible inference and end-to-end learning. where a ∈ TEXT(b) indicates whether answer
+
+string a appears in evidence block b. We use
+5 Inference c = 5000 in our experiments.
+
+The final loss includes both updates:
+Since fixed block encoders already provide a
+useful representation for retrieval, we can pre- L(q, a) = Learly(q, a) + Lfull(q, a)
+compute all block encodings in the evidence cor-
+pus. As a result, the enormous set of evidence If no matching answers are found at all, then the
+blocks does not need to be re-encoded while fine- example is discarded. While we would expect al-
+tuning, and it can be pre-compiled into an index most all examples to be discarded with random ini-
+for fast maximum inner product search using ex- tialization, we discard less than 10% of examples
+isting tools such as Locality Sensitive Hashing. in practice due to ICT pre-training.
+
+With the pre-compiled index, inference follows As previously mentioned, we fine-tune all pa-
+a standard beam-search procedure. We retrieve the rameters except those in the evidence block en-
+top-k evidence blocks and only compute the ex- coder. Since the query encoder is trainable, the
+pensive reader scores for those k blocks. While model can potentially learn to retrieve any evi-
+we only consider the top-k evidence blocks dur- dence block. This expressivity is a crucial differ-
+ing a single inference step, this set dynamically ence from blackbox IR systems, where recall can
+changes during training since the question encoder only be improved by retrieving more evidence.
+is fine-tuned according to the weakly supervised
+QA data, as discussed in the following section. 7 Experimental Setup
+
+7.1 Open Domain QA Datasets
+6 Learning
+
+We train and evaluate on data from 5 existing ques-
+Learning is relatively straightforward, since ICT tion answering or reading comprehension datasets.
+should provide non-trivial zero-shot retrieval. We Not all of them are intended as open domain QA
+first define a distribution over answer derivations: datasets in their original form, so we convert them
+
+∑ to open formats, following DrQA (Chen et al.,
+P (b, s| ex∑p(S(b, s, q))q) = 2017). Each example in the open version of the
+
+exp(S(b′, s′, q)) datasets consists of a single question string and a
+b′∈TOP(k) s′∈b′ set of reference answer strings.
+
+where TOP(k) denotes the top k retrieved blocks Natural Questions contains question from ag-
+based on Sretr . We use k = 5 in our experiments. gregated queries to Google Search (Kwiatkowski
+
+Given a gold answer string a, we find all (pos- et al., 2019). To gather an open version of this
+sibly spuriously) correct derivations in the beam, dataset, we only keep questions with short answers
+and optimize their mar∑ginal log-li∑kelihood: and discard the given evidence document. An-
+
+swers with many tokens often resemble extractive
+Lfull(q, a) = − log P ′(b, s|q) snippets rather than canonical answers, so we dis-
+
+b∈TOP(k) s∈b, a=TEXT(s) card answers with more than 5 tokens.
+
+
+
+Dataset Train Dev Test Example Question Example Answer
+Natural Questions 79168 8757 3610 What does the zip in zip code stand for? Zone Improvement Plan
+WebQuestions 3417 361 2032 What airport is closer to downtown Houston? William P. Hobby Airport
+CuratedTrec 1353 133 694 What metal has the highest melting point? Tungsten
+TriviaQA 78785 8837 11313 What did L. Fran Baum, author of The Wonder- Ozcot
+
+ful Wizard of Oz, call his home in Hollywood?
+SQuAD 78713 8886 10570 Other than the Automobile Club of Southern California State Automo-
+
+California, what other AAA Auto Club chose bile Association
+to simplify the divide?
+
+Table 3: Statistics and examples for the datasets that we evaluate on. There are slightly differences from the
+original datasets as described in Section 7.1, since not all of them were intended to be used in the open setting.
+
+WebQuestions contains questions that were In the Natural Questions, WebQuestions, and
+sampled from the Google Suggest API (Berant CuratedTrec, the question askers do not already
+et al., 2013). The answers are annotated with re- know the answer. This accurately reflects a distri-
+spect to Freebase, but we only keep the string rep- bution of genuine information-seeking questions.
+resentation of the entities. However, annotators must separately find correct
+
+CuratedTrec answers, which requires assistance from automatic
+is a corpus of question-answer
+
+tools and can introduce a moderate bias towards
+pairs derived from TREC QA data curated by
+
+results from the tool.
+Baudis and Sedivý (2015). The questions come
+from various sources of real queries, such as In TriviaQA and SQuAD, automatic tools are
+
+MSNSearch or AskJeeves logs, where the ques- not needed since the questions are written with
+
+tion askers do not observe any evidence docu- known answers in mind. However, this introduces
+
+ments (Voorhees, 2001). another set of biases that are arguably more prob-
+lematic. Question writing is not motivated by an
+
+TriviaQA is a collection of trivia question- information need. This often results in many hints
+answer pairs that were scraped from the web in the question that would not be present in natu-
+(Joshi et al., 2017). We use their unfiltered set and rally occurring questions, as shown in the exam-
+discard their distantly supervised evidence. ples in Table 3. This is particularly problematic
+SQuAD was designed to be a reading com- for SQuAD, where the question askers are also
+prehension dataset rather than an open domain prompted with a specific piece of evidence for the
+QA dataset (Rajpurkar et al., 2016). Answer answer, leading to artificially large lexical overlap
+spans were selected from a Wikipedia paragraph, between the question and evidence.
+and the questions were written by annota- Note that these are simply properties of the
+tors who were instructed to ask questions that datasets rather than actionable criticisms—such
+are answered by a given answer in a given context. data collection methods are necessary to scale up,
+
+and it is unclear how one could collect a truly un-
+On datasets where a development set does biased dataset without impractical costs.
+not exist, we randomly hold out 10% of the 7.3 Implementation Details
+training data for development. On datasets where
+the test set is hidden, we also randomly hold out We mainly evaluate in the setting where only
+10% of the training data for development, and use question-answer string pairs are available for su-
+the original development set for testing (following pervision. See Section 9 for head-to-head com-
+DrQA). A summary of dataset statistics and parisons with the DrQA setting that uses the same
+examples are shown in Table 3. evidence corpus and the same type of supervision.
+
+7.2 Dataset Biases Evidence Corpus We use the English
+Wikipedia snapshot from December 20, 2018
+
+Evaluating on this diverse set of question-answer
+as the evidence corpus.1 The corpus is greedily
+
+pairs is crucial, because all existing datasets have
+inherent biases that are problematic for open do- 1We deviate from DrQA’s 2016 Wikipedia evidence cor-
+main QA systems with learned retrieval. These pus because the original snapshot is no longer publicly avail-
+
+able. The 12-20-2018 snapshot is available at https://
+biases are summarized in Table 4. archive.org/download/enwiki-20181220.
+
+
+
+Dataset Question Question Tool-
+writer writer assisted Model BM25 NNLM ELMO
+
++BERT +BERT +BERT ORQA
+knows knows answer
+answer evidence Natural Questions 24.8 3.2 3.6 31.3
+
+WebQuestions 20.8 9.1 17.7 38.5
+Natural Questions 3 CuratedTrec 27.1 6.0 8.3 36.8
+WebQuestions 3
+CuratedTrec TriviaQA 47.2 7.3 6.0 45.1
+
+3 SQuAD 28.1 2.8 1.9 26.5
+TriviaQA 3
+SQuAD Natural Questions 26.5 4.0 4.7 33.3
+
+3 3
+WebQuestions 17.7 7.3 15.6 36.4
+CuratedTrec 21.3 4.5 6.8 30.1
+
+Table 4: A breakdown of biases in existing QA
+datasets. These biases are associated with either the TriviaQA 47.1 7.1 5.7 45.0
+
+SQuAD 33.2 3.2 2.3 20.2
+question or the answer.
+
+Table 5: Main results: End-to-end exact match
+for open-domain question answering from question-
+
+split into chunks of at most 288 wordpieces based answer pairs only. Datasets where question askers
+on BERT’s tokenizer, while preserving sentence know the answer behave differently from datasets
+boundaries. This results in just over 13 million where they do not.
+evidence blocks. The title of the document is
+included in the block encoder.
+
+BM25 is not trainable, the retrieved evidence con-
+Hyperparameters In all uses of BERT (both sidered during fine-tuning is static. Inspired by
+the retriever and reader), we initialize from the BERTserini (Yang et al., 2019), the final score is
+uncased base model, which consists of 12 trans- a learned weighted sum of the BM25 and reader
+former layers with a hidden size of 768. score. Our implementation is based on Lucene.3
+
+As mentioned in Section 3, the retrieval repre- Language Models While unsupervised neural
+sentations, hq and hb , have 128 dimensions. The retrieval is notoriously difficult to improve over
+small hidden size was chosen so that the final QA traditional IR (Lin, 2019), we include them as
+model can comfortably run on a single machine. baselines for comparison. We experiment with
+We use the default optimizer from BERT. unsupervised pooled representations from neural
+
+When pre-training the retriever with ICT, we language models (LM), which has been shown
+use a learning rate of 10−4 and a batch size of 4096 to be state-of-the-art unsupervised representa-
+on Google Cloud TPUs for 100k steps. When fine- tions (Perone et al., 2018). We compare with two
+tuning, we use a learning rate of 10−5 and a batch widely-used 128-dimensional representations: (1)
+size of 1 on a single machine with a 12GB GPU. NNLM, context-independent embeddings from a
+Answer spans are limited to 10 tokens. We per- feed-forward LMs (Bengio et al., 2003),4 and (2)
+form 2 epochs of fine-tuning for the larger datasets ELMO (small), a context-dependent bidirectional
+(Natural Questions, TriviaQA, and SQuAD), and LSTM (Peters et al., 2018).5
+20 epochs for the smaller datasets (WebQuestions As with ICT, we use the alternate encoders to
+and CuratedTrec). pre-compute the encoded evidence blocks hb and
+
+8 Main Results to initialize the question encoding hq, which is
+fine-tuned. Based on existing IR literature and the
+
+8.1 Baselines intuition that LMs do not explicitly optimize for
+retrieval, we do not expect these to be strong base-
+
+We compare against other retrieval methods by us- lines, but they demonstrate the difficulty of encod-
+ing alternate retrieval scores Sretr (b, q), but with ing blocks of text into 128 dimensions.
+the same reader.
+
+8.2 Results
+BM25 A de-facto state-of-the-art unsupervised
+retrieval method is BM25 (Robertson et al., 2009). The main results are show in Table 5. The first
+It has been shown to be robust for both traditional result to note is that BM25 is a powerful re-
+information retrieval tasks, and evidence retrieval trieval system. Word matching is important, and
+for question answering (Yang et al., 2017).2 Since 3
+
+https://lucene.apache.org/
+4
+https://tfhub.dev/google/nnlm-en-dim128/1
+
+2We also include the title, which was slightly beneficial. 5
+https://allennlp.org/elmo
+
+Test Dev
+
+
+
+3
+Model Evidence 5
+
+Retrieved SQuAD
+30
+
+DRQA 5 documents 27.1
+DRQA (DS) 5 documents 28.4 25
+
+DRQA (DS + MTL) 5 documents 29.8 20 ORQA
+BM25 + BERT
+
+BERTSERINI 5 documents 19.1
+BERTSERINI 29 paragraphs 36.6 0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1
+BERTSERINI 100 paragraphs 38.6 ICT masking rate
+BM25 + BERT
+(gold deriv.) 5 blocks 34.7 Figure 3: Analysis: Performance on our open version
+
+of the Natural Questions dev set with various mask-
+Table 6: Analysis: Results comparable to previous ing rates for the ICT pre-training. Too much masking
+work in the strongly supervised setting, where models prevents the model from learning to exploit exact n-
+have access to gold derivations from SQuAD. Differ- gram overlap. Too little masking makes language un-
+ent systems segment Wikipedia differently. There are derstanding unnecessary.
+5.1M documents, 29.5M paragraphs, and 12.1M blocks
+in the December 12, 2016 Wikipedia snapshot.
+
+we are aware of—BERTserini (Yang et al., 2019).
+DrQA’s reader is DocReader (Chen et al.,
+
+dense vector representations derived from lan- 2017), and they use TF-IDF to retrieve the top k
+guage models do not readily capture this. documents. They also include distant supervision
+
+We also show that on questions that were de- based on TF-IDF retrieval. BERTserini’s reader is
+rived from real users who are seeking informa- derived from base BERT (much like our reader),
+tion (Natural Questions, WebQuestions, and Cu- and they use BM25 to retrieve the top k paragraphs
+ratedTrec), our ICT pre-trained retriever outper- (much like our BM25 baseline). A major differ-
+forms BM25 by a large marge—6 to 19 points in ence is that BERTserini uses true paragraphs from
+exact match depending on the dataset. Wikipedia rather than arbitrary blocks, resulting in
+
+However, in datasets where the question askers more evidence blocks due to uneven lengths.
+already know the answer, i.e. SQuAD and Triv- For fair comparison with these strongly su-
+iaQA, the retrieval problem resembles traditional pervised systems, we pre-train the reader on
+IR. In this setting, a highly compressed 128- SQuAD data.6 In Table 6, our BM25 baseline,
+dimensional vector cannot match BM25’s ability which retrieves 5 evidence blocks, greatly outper-
+to precisely represent every word in the evidence. forms 5-document BERTserini and is close to 29-
+
+The notable drop between development and test paragraph BERTserini.
+accuracy for SQuAD is a reflection of an artifact
+in the dataset—its 100k questions are derived from 9.2 Masking Rate in the Inverse Cloze Task
+only 536 documents. Therefore, good retrieval tar-
+
+The pseudo-query is masked from the evidence
+gets are highly correlated between training exam-
+
+block 90% of the time, motivated by intuition in
+ples, violating the IID assumption, and making it
+
+Section 4. We empirically verify our intuitions in
+unsuitable for learned retrieval. We strongly sug-
+
+Figure 3 by varying the masking rate, and com-
+gest that those who are interested in end-to-end
+
+paring results on our open version of the Natural
+open-domain QA models no longer train and eval-
+
+Questions development set.
+uate with SQuAD for this reason.
+
+If we always mask the pseudo-query, the re-
+9 Analysis triever never learns that n-gram overlap is a pow-
+
+erful retrieval signal, losing almost 10 points in
+9.1 Strongly supervised comparison end-to-end performance. If we never mask the
+
+To verify that our BM25 baseline is indeed state pseudo-query, the problem is reduced to memo-
+
+of the art, we also provide direct comparisons with rization and does not generalize well to question
+
+DrQA’s setup, where systems have access to gold answering. The latter loses 6 points in end-to-end
+
+answer derivations from SQuAD (Rajpurkar et al., performance, which—perhaps not surprisingly—
+
+2016). While many systems have been proposed produces near-identical results to BM25.
+
+following DrQA’s original setting, we compare 6We use DrQA’s December 12, 2016 snapshot of
+only to the original system and the best system that Wikipedia for an apples-to-apples comparison.
+
+Natural Questions
+Exact Match
+
+
+
+Example ORQA BM25 + BERT
+Q: what is the new ...The team’s primary colors are old gold and ...the SkyDome was owned by Sportsco at the
+orleans saints symbol black; their logo is a simplified fleur-de-lis. time... the sale of the New Orleans Saints with
+called They played their home games in Tulane team owner Tom Benson... the Saints became a
+A: fleur-de-lis Stadium through the 1974 NFL season.... symbol for that community...
+Q: how many senators ...powers of the Senate are established in ...The Georgia Constitution mandates a
+per state in the us Article One of the U.S. Constitution. Each maximum of 56 senators, elected from
+A: two U.S. state is represented by two senators... single-member districts...
+Q: when was germany ...Under the Weimar Republic, Germany (in ...the accession of the German Democratic
+given a permanent seat fact the “Deutsches Reich” or German Empire) Republic to the Federal Republic of Germany,
+on the council of the was admitted to the League of Nations through it was effective on 3 October 1990...Germany
+league of nations a resolution passed on September 8 1926. An has been elected as a non-permanent member
+A: 1926 additional 15 countries joined later... of the United Nations Security Council...
+Q: when was diary of ...“Diary of a Wimpy Kid” first appeared on Diary of a Wimpy Kid: Double Down is the
+a wimpy kid double FunBrain in 2004, where it was read 20 million eleventh book in the ”Diary of a Wimpy Kid”
+down published times. The abridged hardcover adaptation was series by Jeff Kinney... The book was
+A: November 1, 2016 released on April 1, 2007... published on November 1, 2016...
+
+Table 7: Analysis: Example predictions on our open version of the Natural Questions dev set. We show the highest
+scoring derivation, consisting of the evidence block and the predicted answer in bold. ORQA is more robust at
+separating semantically distinct text that have high lexical overlap. However, the limitation of the 128-dimensional
+vectors is that extremely specific concepts are less precisely represented.
+
+9.3 Example Predictions are needed to find positive learning signal while
+For a more intuitive understanding of the improve- avoiding spurious ambiguities.
+ments from ORQA, we compare its predictions While we motivate ICT from first principles as
+with baseline predictions in Table 7. We find that an unsupervised proxy for evidence retrieval, it is
+ORQA is more robust at separating semantically closely related to existing representation learning
+distinct text with high lexical overlap, as shown literature. ICT can be considered a generalization
+in the first three examples. However, it is ex- of the skip-gram objective (Mikolov et al., 2013),
+pected that there are limits to how much informa- with a coarser granularity, deep architecture, and
+tion can be compressed into 128-dimensional vec- in-batch negative sampling from Logeswaran and
+tors. The last example shows that ORQA has trou- Lee (2018).
+ble precisely representing extremely specific con- Consulting external evidence sources with la-
+cepts that sparse representations can cleanly sepa- tent retrieval has also been explored in information
+rate. These errors indicate that a hybrid approach extraction (Narasimhan et al., 2016). In compari-
+would be promising future work. son, we are able to learn a much more expressive
+
+retriever due to the strong inductive biases from
+10 Related Work ICT pre-training.
+
+Recent progress has been made towards improving 11 Conclusion
+evidence retrieval (Wang et al., 2018; Kratzwald
+and Feuerriegel, 2018; Lee et al., 2018; Das et al., We presented ORQA, the first open domain ques-
+2019) by learning to aggregate from multiple re- tion answering system where the retriever and
+trieval steps. They re-rank evidence candidates reader are jointly learned end-to-end using only
+from a closed set, and we aim to integrate these question-answer pairs and without any IR system.
+complementary approaches in future work. This is made possible by pre-training the retriever
+
+Our approach is also reminiscent of weakly su- using an Inverse Cloze Task (ICT). Experiments
+pervised semantic parsing (Clarke et al., 2010; show that learning to retrieve is crucial when the
+Liang et al., 2013; Artzi and Zettlemoyer, questions reflect an information need, i.e. the
+2013; Fader et al., 2014; Berant et al., 2013; question writers do not already know the answer.
+Kwiatkowski et al., 2013), with which we share Acknowledgements
+similar challenges—(1) inference and learning
+are tightly coupled, (2) latent derivations must We thank the Google AI Language Team for valu-
+be discovered, and (3) strong inductive biases able suggestions and feedback.
+
+
+
+References Mandar Joshi, Eunsol Choi, Daniel Weld, and Luke
+Zettlemoyer. 2017. Triviaqa: A large scale distantly
+
+Yoav Artzi and Luke Zettlemoyer. 2013. Weakly su- supervised challenge dataset for reading comprehen-
+pervised learning of semantic parsers for mapping sion. In Proceedings of the 55th Annual Meeting of
+instructions to actions. Transactions of the Associa- the Association for Computational Linguistics (Vol-
+tion for Computational Linguistics, 1(1):49–62. ume 1: Long Papers), volume 1, pages 1601–1611.
+
+Petr Baudis and Jan Sedivý. 2015. Modeling of the Bernhard Kratzwald and Stefan Feuerriegel. 2018.
+question answering task in the yodaqa system. In Adaptive document retrieval for deep question an-
+CLEF. swering. arXiv preprint arXiv:1808.06528.
+
+Yoshua Bengio, Réjean Ducharme, Pascal Vincent, and Tom Kwiatkowski, Eunsol Choi, Yoav Artzi, and Luke
+Christian Jauvin. 2003. A neural probabilistic lan- Zettlemoyer. 2013. Scaling semantic parsers with
+guage model. Journal of machine learning research, on-the-fly ontology matching. In Proceedings of the
+3(Feb):1137–1155. 2013 conference on empirical methods in natural
+
+language processing, pages 1545–1556.
+Jonathan Berant, Andrew Chou, Roy Frostig, and Percy
+
+Liang. 2013. Semantic parsing on freebase from Tom Kwiatkowski, Jennimaria Palomaki, Olivia
+question-answer pairs. In Proceedings of the 2013 Rhinehart, Michael Collins, Ankur Parikh, Chris Al-
+Conference on Empirical Methods in Natural Lan- berti, Danielle Epstein, Illia Polosukhin, Matthew
+guage Processing, pages 1533–1544. Kelcey, Jacob Devlin, et al. 2019. Natural ques-
+
+tions: a benchmark for question answering research.
+Danqi Chen, Adam Fisch, Jason Weston, and Antoine Transactions of the Association for Computational
+
+Bordes. 2017. Reading wikipedia to answer open- Linguistics.
+domain questions. In Proceedings of the 55th An-
+nual Meeting of the Association for Computational Jinhyuk Lee, Seongjun Yun, Hyunjae Kim, Miyoung
+Linguistics (Volume 1: Long Papers), volume 1, Ko, and Jaewoo Kang. 2018. Ranking paragraphs
+pages 1870–1879. for improving answer recall in open-domain ques-
+
+tion answering. arXiv preprint arXiv:1810.00494.
+James Clarke, Dan Goldwasser, Ming-Wei Chang, and Kenton Lee, Shimi Salant, Tom Kwiatkowski, Ankur
+
+Dan Roth. 2010. Driving semantic parsing from Parikh, Dipanjan Das, and Jonathan Berant. 2016.
+the world’s response. In Proceedings of the four- Learning recurrent span representations for ex-
+teenth conference on computational natural lan- tractive question answering. arXiv preprint
+guage learning, pages 18–27. Association for Com- arXiv:1611.01436.
+putational Linguistics.
+
+Percy Liang, Michael I Jordan, and Dan Klein. 2013.
+Rajarshi Das, Shehzaad Dhuliawala, Manzil Zaheer, Learning dependency-based compositional seman-
+
+and Andrew McCallum. 2019. Multi-step retriever- tics. Computational Linguistics, 39(2):389–446.
+reader interaction for scalable open-domain question
+answering. In International Conference on Learn- Jimmy Lin. 2019. The neural hype and comparisons
+ing Representations. against weak baselines. In ACM SIGIR Forum.
+
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Lajanugen Logeswaran and Honglak Lee. 2018. An
+Kristina Toutanova. 2018. Bert: Pre-training of deep efficient framework for learning sentence represen-
+bidirectional transformers for language understand- tations. arXiv preprint arXiv:1803.02893.
+ing. arXiv preprint arXiv:1810.04805.
+
+Tomas Mikolov, Kai Chen, Greg Corrado, and Jef-
+Bhuwan Dhingra, Kathryn Mazaitis, and William W frey Dean. 2013. Efficient estimation of word
+
+Cohen. 2017. Quasar: Datasets for question an- representations in vector space. arXiv preprint
+swering by search and reading. arXiv preprint arXiv:1301.3781.
+arXiv:1707.03904. Karthik Narasimhan, Adam Yala, and Regina Barzilay.
+
+2016. Improving information extraction by acquir-
+Matthew Dunn, Levent Sagun, Mike Higgins, V Ugur ing external evidence with reinforcement learning.
+
+Guney, Volkan Cirik, and Kyunghyun Cho. 2017. arXiv preprint arXiv:1603.07954.
+Searchqa: A new q&a dataset augmented with
+context from a search engine. arXiv preprint Christian S Perone, Roberto Silveira, and Thomas S
+arXiv:1704.05179. Paula. 2018. Evaluation of sentence embeddings
+
+in downstream and linguistic probing tasks. arXiv
+Anthony Fader, Luke Zettlemoyer, and Oren Etzioni. preprint arXiv:1806.06259.
+
+2014. Open question answering over curated and
+extracted knowledge bases. In Proceedings of the Matthew E. Peters, Mark Neumann, Mohit Iyyer, Matt
+20th ACM SIGKDD international conference on Gardner, Christopher Clark, Kenton Lee, and Luke
+Knowledge discovery and data mining, pages 1156– Zettlemoyer. 2018. Deep contextualized word rep-
+1165. ACM. resentations. In Proc. of NAACL.
+
+
+
+Alec Radford, Jeffrey Wu, Rewon Child, David Luan,
+Dario Amodei, and Ilya Sutskever. 2019. Language
+models are unsupervised multitask learners. OpenAI
+Blog.
+
+Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev, and
+Percy Liang. 2016. Squad: 100,000+ questions for
+machine comprehension of text. In Proceedings of
+the 2016 Conference on Empirical Methods in Nat-
+ural Language Processing, pages 2383–2392.
+
+Stephen Robertson, Hugo Zaragoza, et al. 2009. The
+probabilistic relevance framework: Bm25 and be-
+yond. Foundations and Trends in Information Re-
+trieval, 3(4):333–389.
+
+Amit Singh. 2012. Entity based q&a retrieval. In Pro-
+ceedings of the 2012 Joint conference on empirical
+methods in natural language processing and com-
+putational natural language learning, pages 1266–
+1277. Association for Computational Linguistics.
+
+Wilson L Taylor. 1953. “Cloze procedure”: A new
+tool for measuring readability. Journalism Bulletin,
+30(4):415–433.
+
+Ellen M Voorhees. 2001. Overview of the trec 2001
+question answering track. In In Proceedings of the
+Tenth Text REtrieval Conference (TREC. Citeseer.
+
+Shuohang Wang, Mo Yu, Xiaoxiao Guo, Zhiguo Wang,
+Tim Klinger, Wei Zhang, Shiyu Chang, Gerry
+Tesauro, Bowen Zhou, and Jing Jiang. 2018. R 3:
+Reinforced ranker-reader for open-domain question
+answering. In Thirty-Second AAAI Conference on
+Artificial Intelligence.
+
+Peilin Yang, Hui Fang, and Jimmy Lin. 2017. Anserini:
+Enabling the use of lucene for information retrieval
+research. In Proceedings of the 40th International
+ACM SIGIR Conference on Research and Develop-
+ment in Information Retrieval, pages 1253–1256.
+ACM.
+
+Wei Yang, Yuqing Xie, Aileen Lin, Xingyu Li, Luchen
+Tan, Kun Xiong, Ming Li, and Jimmy Lin. 2019.
+End-to-end open-domain question answering with
+bertserini. arXiv preprint arXiv:1902.01718.

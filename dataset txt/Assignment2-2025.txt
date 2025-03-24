@@ -1,0 +1,137 @@
+McMaster University SEP 775
+
+Assignment 2
+RNN-Based Text Generation (Total: 50 Points)
+
+Objectives
+
+Implement a simple RNN for text generation to deepen your understanding of how recurrent neural networks can be used to model sequences and generate text based on learned patterns.
+
+1. RNN Model Implementation (10 Points)
+
+• Implement a basic Recurrent Neural Network model from scratch using PyTorch or
+TensorFlow. Your model should include an embedding layer, at least one RNN layer, and
+a fully connected layer for output. Refer to the Recurrent Neural Networks (RNN)
+section of the lectures for guidance on the architecture.
+
+• Use the Long Short-Term Memory RNNs (LSTMs) section as a reference to enhance
+your model with LSTM cells to improve its ability to capture long-term dependencies in
+text.
+
+2. Dataset Preparation (10 Points)
+
+• Select a small text dataset to train your model. This could be a collection of poems, song
+lyrics, or any text you choose. Preprocess the data by tokenizing the text into sequences
+and converting them into a numerical format suitable for training your RNN.
+
+3. Training (10 Points)
+
+• Train your RNN model on the prepared dataset. Aim to optimize the model to predict
+the next word in a sequence based on the given context. Adjust hyperparameters such as
+learning rate, number of epochs, and hidden layer dimensions to improve performance.
+
+4. Text Generation (10 Points)
+
+• Once trained, use your model to generate text. Start with a seed sentence or word, then
+predict the next word using your model. Append the predicted word to your text and use
+the updated sequence as the new input to generate the next word. Repeat this process to
+generate a text of at least 100 words.
+
+5. Analysis (10 Points)
+
+• Analyze the generated text. Discuss how well your model captures the style and coherence
+of the chosen dataset. Reflect on the performance of the basic RNN model versus the
+LSTM-enhanced version. Consider the effects of different hyperparameters on the quality
+of the generated text.
+
+McMaster University 1
+
+
+
+McMaster University SEP 775
+
+Seq2Seq Machine Translation with Attention (Total: 50 Points)
+
+Objectives
+
+Implement a sequence-to-sequence model with attention for machine translation between
+two languages (e.g., English to French). This task will help you understand conditioned
+generation in the context of sequence translation, leveraging the power of LSTMs and attention
+mechanisms.
+
+1. Model Architecture (10 Points)
+
+• Build a Seq2Seq model consisting of an encoder and a decoder, both utilizing LSTM layers
+to effectively capture temporal dependencies in the input and target sequences.
+
+• Incorporate an attention mechanism between the encoder and decoder to enhance the
+model’s ability to focus on relevant parts of the input sequence during translation, as
+discussed in the Attention Mechanisms section of the lectures.
+
+2. Dataset Preparation and Preprocessing (10 Points)
+
+• Select a bilingual corpus as your dataset (e.g., a collection of English-French sentence
+pairs). Perform necessary preprocessing steps, including tokenization, converting text into
+sequences of integers, and padding sequences to ensure uniform length.
+
+3. Training (10 Points)
+
+• Train your Seq2Seq model on the preprocessed dataset, aiming to minimize the difference
+between the decoder’s predicted translation and the actual target sentence. Experiment
+with different hyperparameters, such as the number of LSTM units, learning rate, and
+batch size, to optimize your model’s performance.
+
+4. Translation and Evaluation (10 Points)
+
+• Use your trained model to translate a set of sentences from the source language to the target
+language. Evaluate translation quality using an appropriate metric, such as the BLEU
+(Bilingual Evaluation Understudy) score, to quantitatively assess how your translations
+compare to reference translations.
+
+5. Analysis (10 Points)
+
+• Discuss the impact of the attention mechanism on translation quality. Compare your
+model’s performance with and without attention using both qualitative examples and
+quantitative metrics. Reflect on how different architectural choices and hyperparameters
+influenced the outcomes.
+
+McMaster University 2
+
+
+
+McMaster University SEP 775
+
+Submission Guidelines
+
+• Submit all code as a Google Colab notebook, ensuring the link is shared in the submission
+description withAnyone with the link access. Additionally, upload the notebook file and
+include detailed explanations and visualizations, either within the notebook as markdown
+cells or in a separate PDF report. Avoid sharing .py or ZIP files for this assignment.
+
+• Clearly label each part and question in your submissions.
+
+• Deadline: March 5th, 2025
+
+Rubric and Expectations
+
+• Code Quality and Functionality: Code should be well-organized, properly commented,
+and function as intended. The use of Python and relevant libraries should demonstrate a
+strong understanding of the tools.
+
+• Analysis and Interpretation: Provide a detailed written analysis of your model’s
+performance, including insights into the design decisions behind your RNN or Seq2Seq
+models. Discuss the impact of LSTM units and attention mechanisms, and how these
+choices influenced the outcomes of your tasks. Highlight the strengths and limitations of
+your models, supporting your discussion with concrete examples from your results (e.g.,
+text generation snippets or translation pairs).
+
+• Visualization: Include visual representations to illustrate your model’s behavior or
+performance, such as loss curves over training epochs or attention heat maps for translation
+tasks. Visualizations should be well-designed, with clear labels and titles to effectively
+communicate your findings. Interpret these visualizations in your report, explaining what
+they reveal about your model’s learning process or attention patterns.
+
+• Adherence to Guidelines: Submissions must follow the provided guidelines, including
+formatting, labeling, and meeting the deadline.
+
+McMaster University 3

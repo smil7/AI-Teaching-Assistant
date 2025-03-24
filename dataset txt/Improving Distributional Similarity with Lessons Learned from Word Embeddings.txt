@@ -1,0 +1,1188 @@
+﻿Improving Distributional Similarity
+with Lessons Learned from Word Embeddings
+
+Omer Levy Yoav Goldberg Ido Dagan
+Computer Science Department
+
+Bar-Ilan University
+Ramat-Gan, Israel
+
+{omerlevy,yogo,dagan}@cs.biu.ac.il
+
+Abstract A recent study by Baroni et al. (2014) con-
+ducts a set of systematic experiments compar-
+
+Recent trends suggest that neural- ing word2vec embeddings to the more tradi-
+network-inspired word embedding models tional distributional methods, such as pointwise
+outperform traditional count-based distri- mutual information (PMI) matrices (see Turney
+butional models on word similarity and and Pantel (2010) and Baroni and Lenci (2010)
+analogy detection tasks. We reveal that for comprehensive surveys). These results suggest
+much of the performance gains of word that the new embedding methods consistently out-
+embeddings are due to certain system perform the traditional methods by a non-trivial
+design choices and hyperparameter op- margin on many similarity-oriented tasks. How-
+timizations, rather than the embedding ever, state-of-the-art embedding methods are all
+algorithms themselves. Furthermore, based on the same bag-of-contexts representation
+we show that these modifications can be of words. Furthermore, analysis by Levy and
+transferred to traditional distributional Goldberg (2014c) shows that word2vec’s SGNS
+models, yielding similar gains. In contrast is implicitly factorizing a word-context PMI ma-
+to prior reports, we observe mostly local trix. That is, the mathematical objective and the
+or insignificant performance differences sources of information available to SGNS are in
+between the methods, with no global fact very similar to those employed by the more
+advantage to any single approach over the traditional methods.
+others. What, then, is the source of superiority (or per-
+
+1 Introduction ceived superiority) of these recent embeddings?
+While the focus of the presentation in the word-
+
+Understanding the meaning of a word is at the embedding literature is on the mathematical model
+heart of natural language processing (NLP). While and the objective being optimized, other factors af-
+a deep, human-like, understanding remains elu- fect the results as well. In particular, embedding
+sive, many methods have been successful in recov- algorithms suggest some natural hyperparameters
+ering certain aspects of similarity between words. that can be tuned; many of which were already
+
+Recently, neural-network based approaches tuned to some extent by the algorithms’ design-
+in which words are “embedded” into a low- ers. Some hyperparameters, such as the number
+dimensional space were proposed by various au- of negative samples to use, are clearly marked as
+thors (Bengio et al., 2003; Collobert and Weston, tunable. Other modifications, such as smoothing
+2008). These models represent each word as a d- the negative-sampling distribution, are reported in
+dimensional vector of real numbers, and vectors passing and considered thereafter as part of the al-
+that are close to each other are shown to be se- gorithm. Others still, such as dynamically-sized
+mantically related. In particular, a sequence of pa- context windows, are not even mentioned in some
+pers by Mikolov et al. (2013a; 2013b) culminated of the papers, but are part of the canonical imple-
+in the skip-gram with negative-sampling training mentation. All of these modifications and system
+method (SGNS): an efficient embedding algorithm design choices, which we collectively denote as
+that provides state-of-the-art results on various lin- hyperparameters, are part of the final algorithm,
+guistic tasks. It was popularized via word2vec, and, as we show, have a substantial impact on per-
+a program for creating word embeddings. formance.
+
+211
+
+Transactions of the Association for Computational Linguistics, vol. 3, pp. 211–225, 2015. Action Editor: Patrick Pantel.
+Submission batch: 1/2015; Revision batch 3/2015; Published 5/2015.
+
+©c 2015 Association for Computational Linguistics. Distributed under a CC-BY-NC-SA 4.0 license.
+
+
+
+In this work, we make these hyperparameters D. We use #(w, c) to denote the number of times
+explicit, and show how they can be adapted and t∑he pair (w, c) appears in D. Similarly, #(w) =
+transferred into the traditional count-based ap- c′∈V #(w, c′
+
+∑
+) and #(c) = (w′
+
+C w′∈V # , c)
+W
+
+proach. To asses how each hyperparameter con- are the number of times w and c occurred in D,
+tributes to the algorithms’ performance, we con- respectively. In some algorithms, words and con-
+duct a comprehensive set of experiments and com- texts are embedded in a space of d dimensions.
+pare four different representation methods, while In these cases, each word w ∈ VW is associated
+controlling for the various hyperparameters. with a vector w~ ∈ Rd and similarly each con-
+
+Once adapted across methods, hyperparameter text c ∈ VC is represented as a vector ~c ∈ Rd.
+tuning significantly improves performance in ev- We sometimes refer to the vectors w~ as rows in a
+ery task. In many cases, changing the setting of a |VW |×d matrix W , and to the vectors ~c as rows
+single hyperparameter yields a greater increase in in a |VC |×d matrix C. When referring to embed-
+performance than switching to a better algorithm dings produced by a specific method x, we may
+or training on a larger corpus. useW x and Cx (e.g. WSGNS or CSV D). All vec-
+
+In particular, word2vec’s smoothing of the tors are normalized to unit length before they are
+negative sampling distribution can be adapted used for similarity calculation, making cosine sim-
+to PPMI-based methods by introducing a novel, ilarity and dot-product equivalent (see Section 3.3
+smoothed variant of the PMI association measure for further discussion).
+(see Section 3.2). Using this variant increases per-
+formance by over 3 points per task, on average. Contexts D is commonly obtained by taking a
+We suspect that this smoothing partially addresses corpus w1, w2, . . . , wn and defining the contexts
+the “Achilles’ heel” of PMI: its bias towards co- of word wi as the words surrounding it in an L-
+occurrences of rare words. sized window wi−L, . . . , wi−1, wi+1, . . . , wi+L.
+
+We also show that when all methods are allowed While other definitions of contexts have been stud-
+to tune a similar set of hyperparameters, their per- ied (Padó and Lapata, 2007; Baroni and Lenci,
+formance is largely comparable. In fact, there is no 2010; Levy and Goldberg, 2014a) this work fo-
+consistent advantage to one algorithmic approach cuses on fixed-window bag-of-words contexts.
+over another, a result that contradicts the claim that
+embeddings are superior to count-based methods. 2.1 Explicit Representations (PPMI Matrix)
+
+The traditional way to represent words in the
+2 Background distributional approach is to construct a high-
+We consider four word representation methods: dimensional sparse matrix M , where each row
+the explicit PPMI matrix, SVD factorization of represents a word w in the vocabulary VW and
+said matrix, SGNS, and GloVe. For historical each column a potential context c ∈ VC . The value
+reasons, we refer to PPMI and SVD as “count- of each matrix cell Mij represents the association
+based” representations, as opposed to SGNS and between the wordwi and the context cj . A popular
+GloVe, which are often referred to as “neural” measure of this association is pointwise mutual in-
+or “prediction-based” embeddings. All of these formation (PMI) (Church and Hanks, 1990). PMI
+methods (as well as all other “skip-gram”-based is defined as the log ratio between w and c’s joint
+embedding methods) are essentially bag-of-words probability and the product of their marginal prob-
+models, in which the representation of each word abilities, which can be estimated by:
+reflects a weighted bag of context-words that co-
+occur with it. Such bag-of-word embedding mod- PMI(w, c) = log P̂ (w,c) = log #(w,c)·|D|
+
+P̂ (w)P̂ (c) #(w)·#(c)
+els were previously shown to perform as well as
+or better than more complex embedding methods
+on similarity and analogy tasks (Mikolov et al., The rows of MPMI contain many entries of word-
+2013a; Pennington et al., 2014). context pairs (w, c) that were never observed in
+
+the corpus, for which PMI(w, c) = log 0 = −∞.
+Notation We assume a collection of words w ∈ A common approach is thus to replace the MPMI
+
+VW and their contexts c ∈ VC , where VW and VC matrix with MPMI
+0 , in which PMI(w, c) = 0 in
+
+are the word and context vocabularies, and denote cases where #(w, c) = 0. A more consistent ap-
+the collection of observed word-context pairs as proach is to use positive PMI (PPMI), in which all
+
+212
+
+
+
+negative values are replaced by 0: 2.3 Skip-Grams with Negative Sampling
+(SGNS)
+
+PPMI(w, c) = max (PMI (w, c) , 0) We present a brief sketch of SGNS – the skip-gram
+embedding model introduced in (Mikolov et al.,
+
+Bullinaria and Levy (2007) showed that MPPMI
+2013a) trained using the negative-sampling proce-
+
+outperforms MPMI
+0 on semantic similarity tasks. dure presented in (Mikolov et al., 2013b). A de-
+
+A well-known shortcoming of PMI, which per- tailed derivation of SGNS is available in (Gold-
+sists in PPMI, is its bias towards infrequent events berg and Levy, 2014).
+(Turney and Pantel, 2010). A rare context c SGNS seeks to represent each word w ∈ V
+that co-occurred with a target word w even once, W
+
+and each context c ∈ VC as d-dimensional vec-
+will often yield relatively high PMI score because tors w~ and ~c, such that words that are “similar”
+P̂ (c), which is in PMI’s denominator, is very to each other will have similar vector representa-
+small. This creates a situation in which the top tions. It does so by trying to maximize a function
+“distributional features” (contexts) of w are often of the product w~ · ~c for (w, c) pairs that occur in
+extremely rare words, which do not necessarily
+
+D, and minimize it for negative examples: (w, cN )
+appear in the respective representations of words pairs that do not necessarily occur in D. The neg-
+that are semantically similar to w. Nevertheless, ative examples are created by stochastically cor-
+the PPMI measure is widely regarded as state-of- rupting observed (w, c) pairs from D – hence the
+the-art for these kinds of distributional-similarity name “negative sampling”. For each observation
+models. of (w, c), SGNS draws k contexts from the em-
+2.2 Singular Value Decomposition (SVD) pirical unigram distribution PD(c) = #(c)
+
+|D| . In
+word2vec’s implementation of SGNS, this dis-
+
+While sparse vector representations work well, tribution is smoothed, a design choice that boosts
+there are also advantages to working with dense its performance. We explore this hyperparameter
+low-dimensional vectors, such as improved com- and others in Section 3.
+putational efficiency and, arguably, better gener-
+alization. Such vectors can be obtained by per- SGNS as Implicit Matrix Factorization Levy
+forming dimensionality reduction over the sparse and Golberg (2014c) show that SGNS’s corpus-
+high-dimensional matrix. level objective achieves its optimal value when:
+
+A common method of doing so is truncated Sin-
+gular Value Decomposition (SVD), which finds w~ · ~c = PMI(w, c)− log k
+
+the optimal rank d factorization with respect to L2 Hence, SGNS is implicitly factorizing a word-
+loss (Eckart and Young, 1936). It was popular- context matrix whose cell’s values are PMI,
+ized in NLP via Latent Semantic Analysis (LSA) shifted by a global constant (log k):
+(Deerwester et al., 1990).
+
+SVD factorizes M into the product of three ma- W · C> = MPMI − log k
+trices U · Σ · V >, where U and V are orthonor-
+mal and Σ is a diagonal matrix of eigenvalues in SGNS performs a different kind of factorization
+
+decreasing order. By keeping only the top d ele- from traditional SVD (see 2.2). In particular, the
+
+ments of Σ, we obtain Md = Ud · Σd · V >d . The factorization’s loss function is not based on L2,
+
+dot-products between the rows ofW = Ud ·Σd are and is much less sensitive to extreme and infi-
+
+equal to the dot-products between rows of nite values due to a sigmoid function surrounding
+Md.
+
+w~ · ~c. Furthermore, the loss is weighted, caus-
+In the setting of word-context matrices, the
+
+ing rare (w, c) pairs to affect the objective much
+dense, d-dimensional rows ofW can substitute the
+
+less than frequent ones. Thus, while many cells in
+very high-dimensional rows of M . Indeed, a com-
+
+MPMI equal log 0 = −∞, the cost incurred for re-
+mon approach in NLP literature is factorizing the
+
+constructing these cells as a small negative value,
+PPMI matrix MPPMI with SVD, and then taking
+
+such as −5 instead of as −∞, is negligible.1
+the rows of:
+
+1The logistic (sigmoidal) objective also curbs very high
+W SVD = Ud · Σd CSVD = V positive values of PMI. We suspect that this property, along
+
+d (1)
+with the weighted factorization property, addresses the afore-
+mentioned shortcoming of PMI, i.e. its overweighting of in-
+
+as word and context representations, respectively. frequent events.
+
+213
+
+
+
+An additional difference from SVD, which will 3.1 Pre-processing Hyperparameters
+be explored further in Section 3.3, is that SVD All the matrix-based algorithms rely on a col-
+factorizes M into three matrices, two of them or- lection D of word-context pairs (w, c) as inputs.
+thonormal and one diagonal, while SGNS factor- word2vec introduces three novel variations on
+izes M into two unconstrained matrices. the way D is collected, which can be easily ap-
+2.4 Global Vectors (GloVe) plied to other methods beyond SGNS.
+
+GloVe (Pennington et al., 2014) seeks to represent Dynamic Context Window (dyn) The tradi-
+each word w ∈ VW and each context c ∈ VC as tional approaches usually use a constant-sized un-
+d-dimensional vectors w~ and ~c such that: weighted context window. For instance, if the win-
+
+w~ · ~c+ bw + bc = log (#(w, c)) ∀(w, c) ∈ dow size is 5, then a word five tokens apart from
+D the target is treated the same as an adjacent word.
+
+Here, bw and bc (scalars) are word/context-specific Following the intuition that contexts closer to the
+biases, and are also parameters to be learned in target are more important, context words can be
+addition to w~ and ~c. weighted according to their distance from the fo-
+
+GloVe’s objective is explicitly defined as a fac- cus word. Both GloVe and word2vec employ
+torization of the log-count matrix, shifted by the such a weighting scheme, and while less com-
+entire vocabularies’ bias terms: mon, this approach was also explored in tradi-
+
+M log(#(w,c)) ≈W · C> + b~w + b~c
+tional count-based methods, e.g. (Sahlgren, 2006).
+
+GloVe’s implementation weights contexts using
+Where b~w is a |VW | dimensional row vector and b~c the harmonic function, e.g. a context word three
+is a |VC | dimensional column vector. tokens away will be counted as 1
+
+3 of an occurrence.
+If we were to fix bw = log #(w) and bc = On the other hand, word2vec’s implementation
+
+log #(c), this would be almost2 equivalent to fac- is equivalent to weighing by the distance from the
+torizing the PMI matrix shifted by log(|D|). How- focus word divided by the window size. For ex-
+ever, GloVe learns these parameters, giving an ex- ample, a size-5 window will weigh its contexts by
+tra degree of freedom over SVD and SGNS. The 5
+
+5 ,
+4
+5 ,
+
+3
+5 ,
+
+2
+5 ,
+
+1
+5 .
+
+model is fit to minimize a weighted least square The reason we call this modification dynamic
+loss, giving more weight to frequent (w, c) pairs.3 context windows is because word2vec imple-
+
+Finally, an important novelty introduced in ments its weighting scheme by uniformly sam-
+(Pennington et al., 2014) is that, assuming VC = pling the actual window size between 1 and L, for
+VW , one could take the representation of a word each token (Mikolov et al., 2013a). The sampling
+w to be w~ + c~w where c~w is the row correspond- method is faster than the direct method in terms of
+ing to w in C>. This may improve results con- training time, since there are fewer SGD updates
+siderably in some circumstances, as we discuss in in SGNS and fewer non-zero matrix cells in the
+Sections 3.3 and 6.2. other methods. For our systematic experiments,
+
+3 Transferable Hyperparameters we used the word2vec-style sampled version for
+all methods, including GloVe.
+
+This section presents various hyperparameters im- Subsampling (sub) Subsampling is a method
+plemented in word2vec and GloVe, and shows of diluting very frequent words, akin to removing
+how to adapt and apply them to count-based stop-words. The subsampling method presented in
+methods. We divide these into: pre-processing (Mikolov et al., 2013a) randomly removes words
+hyperparameters, which affect the algorithms’ that are more frequent than some threshold twith a
+input data; association metric hyperparameters, probability of p, where f marks the word’s corpus
+which define how word-context interactions are frequency:
+calculated; and post-processing hyperparameters, √
+
+p = 1− t
+which modify the resulting word vectors. (2)
+
+f
+2GloVe’s objective ignores (w, c) pairs that do not co-
+
+occur in the training corpus, treating them as missing values. Following the recommendation in (Mikolov et al.,
+SGNS, on the other hand, does take such pairs into account 2013a), we use t = 10−5 in our experiments.4
+through the negative sampling procedure. 4
+
+3The weighting formula is another hyper-parameter that word2vec’s c√ode implements a slightly different for-
+could be tuned, but we keep to the default weighting scheme. mula: p = f−t − t . We followed the formula presented
+
+f f
+
+214
+
+
+
+Another implementation detail of subsampling Second, it acts as a prior on the probability of ob-
+in word2vec is that the removal of tokens is serving a positive example (an actual occurrence
+done before the corpus is processed into word- of (w, c) in the corpus) versus a negative example;
+context pairs. This practically enlarges the con- a higher k means that negative examples are more
+text window’s size for many tokens, because they probable. Shifted PPMI captures only the second
+can now reach words that were not in their origi- aspect of k (a prior). We experiment with three
+nal L-sized windows. We call this kind of subsam- values of k: 1, 5, 15.
+pling “dirty”, as opposed to “clean” subsampling,
+which removes subsampled words without affect- Context Distribution Smoothing (cds) In
+ing the context window’s size. We found their im- word2vec, negative examples (contexts) are
+pact on performance comparable, and report re- sampled according to a smoothed unigram dis-
+sults of only the “dirty” variant. tribution. In order to smooth the original con-
+
+texts’ distribution, all context counts are raised to
+Deleting Rare Words (del) While it is com- the power of α (Mikolov et al. (2013b) found
+mon to ignore words that are rare in the training α = 0.75 to work well). This smoothing varia-
+corpus, word2vec removes these tokens from tion has an analog when calculating PMI directly:
+the corpus before creating context windows. As
+with subsampling, this variation narrows the dis- P̂ (w, c)
+tance between tokens, inserting new word-context PMIα (w, c) = log (3)
+
+P̂ (w)P̂α(c)
+pairs that did not exist in the original corpus with
+the same window size. Though this variation may # (c)α
+
+also have an effect on performance, preliminary P̂α(c) = ∑
+c # (c)α
+
+experiments showed that it was small, and we
+therefore do not investigate its effect in this paper. Like other smoothing techniques (Pantel and Lin,
+
+2002; Turney and Littman, 2003), context distri-
+3.2 Association Metric Hyperparameters bution smoothing alleviates PMI’s bias towards
+The PMI (or PPMI) between a word and its con- rare words. It does so by enlarging the probability
+text is well known to be an effective association of sampling a rare context (since P̂α(c) > P̂ (c)
+
+measure in the word similarity literature. Levy and when c is infrequent), which in turn reduces the
+Golberg (2014c) show that SGNS is implicitly fac- PMI of (w, c) for any w co-occurring with the rare
+torizing a word-context matrix whose cell’s val- context c. In Section 6.2 we demonstrate that this
+ues are shifted PMI. Following their analysis, we novel variant of PMI is very effective, and consis-
+present two variations of the PMI (and implicitly tently improves performance across tasks, meth-
+PPMI) association metric, which we adopt from ods, and configurations. We experiment with two
+SGNS. These enhancements of PMI are not di- values of α: 1 (unsmoothed) and 0.75 (smoothed).
+rectly applicable to GloVe, which, by definition, 3.3 Post-processing Hyperparameters
+uses a different association measure.
+
+We present three hyperparameters that modify the
+Shifted PMI (neg) SGNS has a natural hyper- algorithms’ output: the word vectors.
+parameter k (the number of negative samples),
+which affects the value that SGNS is trying to op- Adding Context Vectors (w+c) Pennington et
+timize for each (w, c): PMI(w, c) − log k. The al. (2014) propose using the context vectors in ad-
+shift caused by k > 1 can be applied to distri- dition to the word vectors as GloVe’s output. For
+butional methods through shifted PPMI (Levy and example, the word “cat” can be represented as:
+Goldberg, 2014c):
+
+~vcat = w~cat + ~ccat
+SPPMI(w, c) = max (PMI (w, c)− log k, 0)
+
+where w~ and ~c are the word and context embed-
+It is important to understand that in SGNS, k has dings, respectively.
+two distinct functions. First, it is used to better This vector combination was originally moti-
+estimate the distribution of negative examples; a vated as an ensemble method. Here, we provide
+higher k means more data and better estimation. a different interpretation of its effect on the co-
+in the original paper (equation 2). sine similarity function. Specifically, we show
+
+215
+
+
+
+that adding context vectors effectively adds first- Eigenvalue Weighting (eig) As mentioned in
+order similarity terms to the second-order similar- Section 2.2, the word and context vectors derived
+ity function. using SVD are typically represented by (equa-
+
+Consider the cosine similarity of two words: tion 1):
+
+W SVD
+cos(x, y) = √ ~vx ·√~vy = = Ud · Σd CSVD = Vd
+
+~vx · ~vx ~vy · ~vy
+However, this is not necessarily the optimal con-
+
+√ (w~x + ~cx) ·√(w~y + ~cy) struction of W SVD for word similarity tasks. We
+(w~x + ~cx) · (w~x + ~cx) (w~y + ~cy) · (w~y + ~cy) note that in the SVD-based factorization, the re-
+
+sulting word and context matrices have very dif-
+w~x · w~y + ~cx · ~cy +√w~x · ~cy + ~cx · w~√ y
+
+= ferent properties. In particular, the context ma-
+w~2x + 2w~x · ~cx + ~c2x w~2y + 2w~y · ~cy + ~c2y trix CSVD is orthonormal while the word matrix
+
+W SVD is not. On the other hand, the factorization
+w~ achieved by SGNS’s training procedure is much
+x · w~√y + ~cx · ~cy +√w~x · ~cy + ~cx · w~y
+
+= (4)
+2 w~x · ~cx + 1 w~y · more “symmetric”, in the sense that neitherWW2V
+
+~cy + 1
+nor CW2V is orthonormal, and no particular bias is
+
+(The last step follows because, as noted in Sec- given to either of the matrices in the training ob-
+tion 2, the word and context vectors are normal- jective. Similar symmetry can be achieved with
+ized after training.) the following factorization:
+
+The resulting expression combines similarity √ √
+terms which can be divided into two groups: W = Ud · Σd C = Vd · Σd (5)
+second-order similarity (wx ·wy, cx · cy) and first-
+order similarity (w∗ · c∗). The second-order terms Alternatively, the eigenvalue matrix can be dis-
+
+measure the extent to which the two words are re- missed altogether:
+
+placeable based on their tendencies to appear in W = Ud C = Vd (6)
+similar contexts, and are the manifestation of Har-
+ris’s (1954) distributional hypothesis. The first- While it is not theoretically clear why the
+order terms measure the tendency of one word to symmetric approach is better for semantic tasks,
+appear in the context of the other. it does work much better empirically (see Sec-
+
+In SVD and SGNS, the first-order similarity tion 6.1). A similar observation was made by
+terms between w and c converge to PMI(w, c), Caron (2001), who suggested adding a parameter
+while in GloVe it converges into their log-count p to control the eigenvalue matrix Σ:
+(with some bias terms).
+
+The similarity calculated in equation 4 is thus a W SVDp = Ud · Σp
+d
+
+symmetric combination of the first-order and sec-
+ond order similarities of x and y, normalized by a Later studies show that weighting the eigenvalue
+function of their reflective first-order similarities: matrix Σd with the exponent p can have a signif-
+
+icant effect on performance, and should be tuned
+√ sim2(x, y) +√sim1(x, y)
+
+sim(x, y) = (Bullinaria and Levy, 2012; Turney, 2012). Adapt-
+sim1(x, x) + 1 sim1(y, y) + 1 ing the notion of symmetric decomposition from
+
+SGNS, this study experiments only with symmet-
+This similarity measure states that words are ric variants of SVD (p = 0, p = 0.5; equations (6)
+
+similar if they tend to appear in similar contexts, and (5)) and the traditional factorization (p = 1;
+or if they tend to appear in the contexts of each equation (1)).
+other (and preferably both).
+
+The additive w+c representation can be triv- Vector Normalization (nrm) As mentioned in
+ially applied to other methods that produce distinct Section 2, all vectors (i.e. W ’s rows) are normal-
+word and context vectors (e.g. SVD and SGNS). ized to unit length (L2 normalization), rendering
+On the other hand, explicit methods such as PPMI the dot product operation equivalent to cosine sim-
+are sparse by definition, and nullify the vast ma- ilarity. This normalization is a hyperparameter set-
+jority of first-order similarities. We therefore do ting in itself, and other normalizations are also ap-
+not apply w+c to PPMI in this study. plicable. The trivial case is using no normalization
+
+216
+
+
+
+Hyper- Explored Applicable GloVe. SGNS was trained using a modified ver-
+parameter Values Methods sion of word2vec which receives a sequence of
+win 2, 5, 10 All
+dyn none, with All pre-extracted word-context pairs (Levy and Gold-
+sub none, dirty, clean† All berg, 2014a). GloVe was trained with 50 itera-
+del none, with† All tions using the original implementation (Penning-
+neg 1, 5, 15 PPMI, SVD, SGNS ton et al., 2014), applied to the pre-extracted word-
+cds 1, 0.75 PPMI, SVD, SGNS
+w+c only w, w + c SVD, SGNS, GloVe context pairs.
+eig 0, 0.5, 1 SVD
+nrm none†, row, col†, both† All 4.3 Test Datasets
+
+We evaluated each word representation on eight
+Table 1: The space of hyperparameters explored in this work.
+† datasets covering similarity and analogy tasks.
+Explored only in preliminary experiments.
+
+Word Similarity We used six datasets to eval-
+at all. Another setting, used by Pennington et al. uate word similarity: the popular WordSim353
+(2014), normalizes the columns of W rather than (Finkelstein et al., 2002) partitioned into two
+its rows. It is also possible to consider a fourth datasets, WordSim Similarity and WordSim Relat-
+setting that combines both row and column nor- edness (Zesch et al., 2008; Agirre et al., 2009);
+malizations. Bruni et al.’s (2012) MEN dataset; Radinsky et
+
+Note that column normalization is akin to dis- al.’s (2011) Mechanical Turk dataset; Luong et
+missing the eigenvalues in SVD. While the hy- al.’s (2013) Rare Words dataset; and Hill et al.’s
+perparameter setting eig = 0 has an important (2014) SimLex-999 dataset. All these datasets con-
+positive impact on SVD, the same cannot be said tain word pairs together with human-assigned sim-
+of column normalization on other methods. In ilarity scores. The word vectors are evaluated by
+preliminary experiments, we tried the four differ- ranking the pairs according to their cosine similar-
+ent normalization schemes described above (none, ities, and measuring the correlation (Spearman’s
+row, column, and both), and found the standard L2 ρ) with the human ratings.
+normalization of W ’s rows (i.e. using the cosine
+similarity measure) to be consistently superior. Analogy The two analogy datasets present ques-
+
+tions of the form “a is to a∗ as b is to b∗”, where
+4 Experimental Setup b∗ is hidden, and must be guessed from the entire
+We explored a large space of hyperparameters, vocabulary. MSR’s analogy dataset (Mikolov et
+representations, and evaluation datasets. al., 2013c) contains 8000 morpho-syntactic anal-
+
+ogy questions, such as “good is to best as smart is
+4.1 Hyperparameter Space to smartest”. Google’s analogy dataset (Mikolov
+Table 1 enumerates the hyperparameter space. We et al., 2013a) contains 19544 questions, about half
+generated 72 PPMI, 432 SVD, 144 SGNS, and 24 of the same kind as in MSR (syntactic analogies),
+GloVe representations; 672 overall. and another half of a more semantic nature, such
+
+as capital cities (“Paris is to France as Tokyo is to
+4.2 Word Representations Japan”). After filtering questions involving out-
+Corpus All models were trained on English of-vocabulary words, i.e. words that appeared in
+Wikipedia (August 2013 dump), pre-processed by English Wikipedia less than 100 times, we remain
+removing non-textual elements, sentence splitting, with 7118 instances in MSR and 19258 instances
+and tokenization. The corpus contains 77.5 mil- in Google. The analogy questions are answered
+lion sentences, spanning 1.5 billion tokens. Mod- using 3CosAdd (addition and subtraction):
+els were derived using windows of 2, 5, and 10 arg max cos(b∗, a∗ − a+ b) =
+tokens to each side of the focus word (the window b∗∈VW \{a∗,b,a}
+
+size parameter is denoted win). Words that ap- arg max (cos(b∗, a∗)− cos(b∗, a) + cos(b∗, b))
+b∗∈VW \{a∗,b,a}
+
+peared less than 100 times in the corpus were ig-
+nored, resulting in vocabularies of 189,533 terms as well as 3CosMul, which is state-of-the-art in
+for both words and contexts. analogy recovery (Levy and Goldberg, 2014b):
+
+Training Embeddings We trained a 500- cos(b∗, a∗) · cos(b∗, b)
+dimensional representation with SVD, SGNS, and arg max
+
+b∗∈VW \{a∗,b,a} cos(b∗, a) + ε
+
+217
+
+
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Add / Mul Add / Mul
+PPMI .709 .540 .688 .648 .393 .338 .491 / .650 .246 / .439
+SVD .776 .658 .752 .557 .506 .422 .452 / .498 .357 / .412
+
+SGNS .724 .587 .686 .678 .434 .401 .530 / .552 .578 / .592
+GloVe .666 .467 .659 .599 .403 .398 .442 / .465 .529 / .576
+
+Table 2: Performance of each method across different tasks in the “vanilla” scenario (all hyperparameters set to default):
+win = 2; dyn = none; sub = none; neg = 1; cds = 1; w+c = only w; eig = 0.0.
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Add / Mul Add / Mul
+PPMI .755 .688 .745 .686 .423 .354 .553 / .629 .289 / .413
+SVD .784 .672 .777 .625 .514 .402 .547 / .587 .402 / .457
+
+SGNS .773 .623 .723 .676 .431 .423 .599 / .625 .514 / .546
+GloVe .667 .506 .685 .599 .372 .389 .539 / .563 .503 / .559
+CBOW .766 .613 .757 .663 .480 .412 .547 / .591 .557 / .598
+
+Table 3: Performance of each method across different tasks using word2vec’s recommended configuration: win = 2;
+dyn = with; sub = dirty; neg = 5; cds = 0.75; w+c = only w; eig = 0.0. CBOW is presented for comparison.
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Add / Mul Add / Mul
+PPMI .755 .697 .745 .686 .462 .393 .553 / .679 .306 / .535
+SVD .793 .691 .778 .666 .514 .432 .554 / .591 .408 / .468
+
+SGNS .793 .685 .774 .693 .470 .438 .676 / .688 .618 / .645
+GloVe .725 .604 .729 .632 .403 .398 .569 / .596 .533 / .580
+
+Table 4: Performance of each method across different tasks using the best configuration for that method and task combination,
+assuming win = 2.
+
+ε = 0.001 is used to prevent division by zero. We default values): small context windows (win =
+abbreviate the two methods “Add” and “Mul”, re- 2), no dynamic contexts (dyn = none), no sub-
+spectively. The evaluation metric for the analogy sampling (sub = none), one negative sample
+questions is the percentage of questions for which (neg = 1), no smoothing (cds = 1), no context
+the argmax result was the correct answer (b∗). vectors (w+c = only w), and default eigenvalue
+
+weights (eig = 0.0).5 Overall, SVD outperforms
+5 Results other methods on most word similarity tasks, often
+
+having a considerable advantage over the second-
+We begin by comparing the effect of various hy-
+
+best. In contrast, analogy tasks present mixed re-
+perparameter configurations, and observe that dif-
+
+sults; SGNS yields the best result in MSR’s analo-
+ferent settings have a substantial impact on per-
+
+gies, while PPMI dominates Google’s dataset.
+formance (Section 5.1); at times, this improve-
+
+The second scenario (Table 3) sets the hyper-
+ment is greater than that of switching to a dif-
+
+parameters to word2vec’s default values: small
+ferent representation method. We then show that,
+
+context windows (win = 2),6 dynamic contexts
+in some tasks, careful hyperparameter tuning can
+
+(dyn = with), dirty subsampling (sub = dirty),
+also outweigh the importance of adding more data
+
+five negative samples (neg = 5), context distribu-
+(5.2). Finally, we observe that our results do not
+
+tion smoothing (cds = 0.75), no context vectors
+agree with a few recent claims in the word embed-
+
+(w+c = only w), and default eigenvalue weights
+ding literature, and suggest that these discrepan-
+cies stem from hyperparameter settings that were 5While it is more common to set eig = 1, this setting
+not controlled for in previous experiments (5.3). degrades SVD’s performance considerably (see Section 6.1).
+
+6While word2vec’s default window size is 5, we present
+a single window size (win = 2) in Tables 2-4, in order to iso-
+
+5.1 Hyperparameters vs Algorithms late win’s effect from the effects of other hyperparameters.
+
+We first examine a “vanilla” scenario (Table 2), in Running the same experiments with different window sizes
+reveals similar trends. Additional results with broader win-
+
+which all hyperparameters are “turned off” (set to dow sizes are shown in Table 5.
+
+218
+
+
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+win Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Add / Mul Add / Mul
+PPMI .732 .699 .744 .654 .457 .382 .552 / .677 .306 / .535
+SVD .772 .671 .777 .647 .508 .425 .554 / .591 .408 / .468
+
+2
+SGNS .789 .675 .773 .661 .449 .433 .676 / .689 .617 / .644
+GloVe .720 .605 .728 .606 .389 .388 .649 / .666 .540 / .591
+PPMI .732 .706 .738 .668 .442 .360 .518 / .649 .277 / .467
+SVD .764 .679 .776 .639 .499 .416 .532 / .569 .369 / .424
+
+5
+SGNS .772 .690 .772 .663 .454 .403 .692 / .714 .605 / .645
+GloVe .745 .617 .746 .631 .416 .389 .700 / .712 .541 / .599
+PPMI .735 .701 .741 .663 .235 .336 .532 / .605 .249 / .353
+SVD .766 .681 .770 .628 .312 .419 .526 / .562 .356 / .406
+
+10
+SGNS .794 .700 .775 .678 .281 .422 .694 / .710 .520 / .557
+GloVe .746 .643 .754 .616 .266 .375 .702 / .712 .463 / .519
+
+SGNS-LS .766 .681 .781 .689 .451 .414 .739 / .758 .690 / .729
+10
+
+GloVe-LS .678 .624 .752 .639 .361 .371 .732 / .750 .628 / .685
+
+Table 5: Performance of each method across different tasks using 2-fold cross-validation for hyperparameter tuning. Configu-
+rations on large-scale (LS) corpora are also presented for comparison.
+
+(eig = 0.0). The results in this scenario are quite report results for different window sizes (win =
+different than those of the vanilla scenario, with 2, 5, 10). We use 2-fold cross validation, in which,
+better performance in many cases. However, this for each task, the hyperparameters are tuned on
+change is not uniform, as we observe that differ- each half of the data and evaluated on the other
+ent settings boost different algorithms. In fact, the half. The numbers reported in Table 5 are the av-
+question “Which method is best?” might have a erages of the two runs for each data-point.
+completely different answer when comparing on The results indicate that approaching the ora-
+the same task but with different hyperparameter cle’s improvements are indeed feasible. When
+values. Looking at Table 2 and Table 3, for ex- comparing the performance of the trained config-
+ample, SVD is the best algorithm for SimLex-999 uration (Table 5) to that of the optimal one (Ta-
+in the vanilla scenario, whereas in the word2vec ble 4), their average difference is about 1%, with
+scenario, it does not perform as well as SGNS. larger datasets usually finding the optimal configu-
+
+The third scenario (Table 4) enables the full ration. It is therefore both practical and beneficial
+range of hyperparameters given small context win- to properly tune hyperparameters for word simi-
+dows (win = 2); we evaluate each method on larity and analogy detection tasks.
+each task given every hyperparameter configura- An interesting observation, which immediately
+tion, and choose the best performance. We see appears when looking at Table 5, is that there is
+a considerable performance increase across all no single method that consistently performs better
+methods when comparing to both the vanilla (Ta- than the rest. This behavior is visible across all
+ble 2) and word2vec scenarios (Table 3): the window sizes, and is discussed in further detail in
+best combination of hyperparameters improves up Section 5.3.
+to 15.7 points beyond the vanilla setting, and over
+6 points on average. It appears that selecting the 5.2 Hyperparameters vs Big Data
+right hyperparameter settings often has more im-
+pact than choosing the most suitable algorithm. An important factor in evaluating distributional
+
+methods is the size of corpus and vocabulary,
+Main Result The numbers in Table 4 result from where larger corpora tend to yield better repre-
+an “oracle” experiment, in which the hyperparam- sentations. However, training word vectors from
+eters are tuned on the test data, providing an upper larger corpora is more costly in computation time,
+bound on the potential performance improvement which could be spent in tuning hyperparameters.
+of hyperparameter tuning. Are such gains achiev- To compare the effect of bigger data versus
+able in practice? more flexible hyperparameter settings, we created
+
+Table 5 describes a realistic scenario, where the a large corpus with over 10.5 billion words (7
+hyperparameters are tuned on a training set, which times larger than our original corpus). This cor-
+is separate from the unseen test data. We also pus was built from an 8.5 billion word corpus sug-
+
+219
+
+
+
+gested by Mikolov for training word2vec,7 to by more than 1.7 points in those cases. In Google’s
+which we added UKWaC (Ferraresi et al., 2008). analogies SGNS and GloVe indeed perform bet-
+As with the original setup, our vocabulary con- ter than PPMI, but only by a margin of 3.7 points
+tained every word that appeared at least 100 times (compare PPMI with win = 2 and SGNS with
+in the corpus, amounting to about 620,000 words. win = 5). MSR’s analogy dataset is the only case
+Finally, we fixed the context windows to be broad where SGNS and GloVe substantially outperform
+and dynamic (win = 10,dyn = with), and ex- PPMI and SVD.9 Overall, there does not seem to
+plored 16 hyperparameter settings comprising of: be a consistent significant advantage to one ap-
+subsampling (sub), shifted PMI (neg = 1, 5), proach over the other, thus refuting the claim that
+context distribution smoothing (cds), and adding prediction-based methods are superior to count-
+context vectors (w+c). This space is somewhat based approaches.
+more restricted than the original hyperparameter The contradictory results in (Baroni et al.,
+space. 2014) stem from creating word2vec embed-
+
+In terms of computation, SGNS scales nicely, dings with somewhat pre-tuned hyperparameters
+requiring about half a day of computation per (recommended by word2vec), and comparing
+setup. GloVe, on the other hand, took several days them to “vanilla” PPMI and SVD representa-
+to run a single 50-iteration instance for this corpus. tions. In particular, shifted PMI (negative sam-
+Applying the traditional count-based methods to pling) and context distribution smoothing (cds =
+this setting proved technically challenging, as they 0.75, equation (3) in Section 3.2) were turned
+consumed too much memory to be efficiently ma- on for SGNS, but not for PPMI and SVD. An
+nipulated. We thus present results for only SGNS additional difference is Baroni et al.’s setting of
+and GloVe (Table 5). eig=1, which significantly deteriorates SVD’s
+
+Remarkably, there are some cases (3/6 word performance (see Section 6.1).
+similarity tasks) in which tuning a larger space
+of hyperparameters is indeed more beneficial than Is GloVe superior to SGNS? Pennington et al.
+expanding the corpus. In other cases, however, (2014) show a variety of experiments in which
+more data does seem to pay off, as evident with GloVe outperforms SGNS (among other meth-
+both analogy tasks. ods). However, our results show the complete op-
+
+posite. In fact, SGNS outperforms GloVe in every
+5.3 Re-evaluating Prior Claims task (Table 5). Only when restricted to 3CosAdd,
+Prior art raises several claims regarding the superi- a suboptimal configuration, does GloVe show a 0.8
+ority of certain methods over the others. However, point advantage over SGNS. This trend persists
+these studies did not control for the hyperparame- when scaling up to a larger corpus and vocabulary.
+ters presented in this work. We thus revisit these This contradiction can be explained by three
+claims, and examine their validity based on the re- major differences in the experimental setup. First,
+sults in Table 5.8 in our experiments, hyperparameters were allowed
+
+to vary; in particular, w+c was applied to all the
+Are embeddings superior to count-based dis- methods, including SGNS. Secondly, Pennington
+tributional methods? It is commonly believed et al. (2014) only evaluated on Google’s analo-
+that modern prediction-based embeddings per- gies, but not on MSR’s. Finally, in our work, all
+form better than traditional count-based methods. methods are compared using the same underlying
+This claim was recently supported by a series of corpus.
+systematic evaluations by Baroni et al. (2014). It is also important to bear in mind that, by
+However, our results suggest a different trend. Ta- definition, GloVe cannot use two hyperparame-
+ble 5 shows that in word similarity tasks, the av- ters: shifted PMI (neg) and context distribution
+erage score of SGNS is actually lower than SVD’s smoothing (cds). Instead, GloVe learns a set of
+when win = 2, 5, and it never outperforms SVD bias parameters that subsumes these two modifica-
+
+7http://word2vec.googlecode.com/svn/ tions and many other potential changes to the PMI
+trunk/demo-train-big-model-v1.sh metric. Albeit its greater flexibility, GloVe does
+
+8We note that all conclusions drawn in this section rely on
+the specific data and settings with which we experiment. It is not fair better than SGNS in our experiments.
+indeed feasible that experiments on different tasks, data, and
+hyperparameters may yield other conclusions. 9Unlike PPMI, SVD underperforms in both analogy tasks.
+
+220
+
+
+
+Is PPMI on-par with SGNS on analogy tasks? win eig Average Performance
+0 .612
+
+Levy and Goldberg (2014b) show that PPMI and 2 0.5 .611
+SGNS perform similarly on both Google’s and 1 .551
+MSR’s analogy tasks. Nevertheless, the results 0 .616
+
+5 0.5 .612
+in Table 5 show a clear advantage to SGNS. 1 .534
+While the gap on Google’s analogies is not very 0 .584
+large (PPMI lags behind SGNS by only 3.7 10 0.5 .567
+
+1 .484
+points), SGNS consistently outperforms PPMI by
+a large margin on the MSR dataset. MSR’s Table 6: The average performance of SVD on word similarity
+analogy dataset captures syntactic relations, such tasks given different values of eig, in the vanilla scenario.
+as singular-plural inflections for nouns and tense
+modifications for verbs. We conjecture that cap- pared CBOW to the other methods when setting
+turing these syntactic relations may rely on certain all the hyperparameters to the defaults provided
+types of contexts, such as determiners and func- by word2vec (Table 3). With the exception
+tion words, which SGNS might be better at cap- of MSR’s analogy task, CBOW is not the best-
+turing – perhaps due to the way it assigns weights performing method of any other task in this sce-
+to different examples, or because it also captures nario. Other scenarios showed similar trends in
+negative correlations which are filtered by PPMI. our preliminary experiments.
+
+A deeper look into Levy and Goldberg’s While CBOW can potentially derive better rep-
+(2014b) experiments reveals the use of PPMI with resentations by combining the tokens in each con-
+positional contexts (i.e. each context is a conjunc- text window, this potential is not realized in prac-
+tion of a word and its relative position to the target tice. Nevertheless, Melamud et al. (2014) show
+word), whereas SGNS was employed with regular that capturing joint contexts can indeed improve
+bag-of-words contexts. Positional contexts might performance on word similarity tasks, and we be-
+contain relevant information for recovering syn- lieve it is a direction worth pursuing.
+tactic analogies, explaining PPMI’s relatively high 6 Hyperparameter Analysis
+score on MSR’s analogy task in (Levy and Gold-
+berg, 2014b). We analyze the individual impact of each hyper-
+
+parameter, and try to characterize the conditions
+Does 3CosMul recover more analogies than in which a certain setting is beneficial.
+3CosAdd? Levy and Goldberg (2014b) show
+that using similarity multiplication (3CosMul) 6.1 Harmful Configurations
+rather than addition (3CosAdd) improves results Certain hyperparameter settings might cripple the
+on all methods and on every task. This claim performance of a certain method. We observe two
+is consistent with our findings; indeed, 3CosMul scenarios in which SVD performs poorly.
+dominates 3CosAdd in every case. The improve-
+ment is particularly noticeable for SVD and PPMI, SVD does not benefit from shifted PPMI. Set-
+which considerably underperform other methods ting neg > 1 consistently deteriorates SVD’s per-
+when using 3CosAdd. formance. Levy and Goldberg (2014c) made a
+
+similar observation, and hypothesized that this is
+5.4 Comparison with CBOW a result of the increasing number of zero-cells,
+
+Another algorithm featured in which may cause SVD to prefer a factorization
+word2vec is
+
+CBOW. Unlike the other methods, CBOW cannot that is very close to the zero matrix. SVD’s L2 ob-
+
+be easily expressed as a factorization of a word- jective is unweighted, and it does not distinguish
+
+context matrix; it ties together the tokens of each between observed and unobserved matrix cells.
+
+context window by representing the context vec- Using SVD “correctly” is bad. The traditional
+tor as the sum of its words’ vectors. It is thus more way of representing words with SVD uses the
+expressive than the other methods, and has a po- eigenvalue matrix (eig = 1): W = Ud · Σd. De-
+tential of deriving better word representations. spite being theoretically well-motivated, this set-
+
+While Mikolov et al. (2013b) found SGNS to ting leads to very poor results in practice, when
+outperform CBOW, Baroni et al. (2014) reports compared to other settings (eig = 0.5 or 0). Ta-
+that CBOW had a slight advantage. We com- ble 6 demonstrates this gap.
+
+221
+
+
+
+The drop in average accuracy when setting 7 Practical Recommendations
+eig = 1 is astounding. The performance gap
+persists under different hyperparameter settings as It is generally advisable to tune all hyperparam-
+well, and drops in performance of over 15 points eters, as well as algorithm-specific hyperparame-
+(absolute) when using eig = 1 instead of eig = ters, for the task at hand. However, this may be
+0.5 or 0 are not uncommon. This setting is one of computationally expensive. We thus provide some
+the main reasons for SVD’s inferior results in the “rules of thumb”, which we found to work well in
+study by Baroni et al. (2014), and also the reason our setting:
+we chose to use eig = 0.5 as the default setting • Always use context distribution smoothing
+for SVD in the vanilla scenario. (cds = 0.75) to modify PMI, as described in
+
+Section 3.2. It consistently improves performance,
+6.2 Beneficial Configurations and is applicable to PPMI, SVD, and SGNS.
+To identify which hyperparameter settings are •Do not use SVD “correctly” (eig = 1). Instead,
+beneficial, we looked at the best configuration of use one of the symmetric variants (Section 3.3).
+each method on each task. We then counted the • SGNS is a robust baseline. While it might not be
+number of times each hyperparameter setting was the best method for every task, it does not signif-
+chosen in these configurations (Table 7). Some icantly underperform in any scenario. Moreover,
+trends emerge, such as PPMI and SVD’s prefer- SGNS is the fastest method to train, and cheapest
+ence towards shorter context windows10 (win = (by far) in terms of disk space and memory con-
+2), and that SGNS always prefers numerous nega- sumption.
+tive samples (neg > 1). •With SGNS, prefer many negative samples.
+
+To get a closer look and isolate the effect of
+each hyperparameter, we controlled for said hy- • for both SGNS and GloVe, it is worthwhile to ex-
+perparameter, and compared the best configura- periment with the w~ +~c variant, which is cheap to
+tions given each of the hyperparameter’s settings. apply (does not require retraining) and can result
+Table 8 shows the difference between default and in substantial gains (as well as substantial losses).
+non-default settings of each hyperparameter.
+
+While many hyperparameter settings can im- 8 Conclusions
+prove performance, they may also degrade it when
+chosen incorrectly. For instance, in the case Recent embedding methods introduce a plethora
+
+of shifted PMI (neg), SGNS consistently profits of design choices beyond network architecture and
+
+from neg > 1, while SVD’s performance is dra- optimization algorithms. We reveal that these
+
+matically reduced. For PPMI, the utility of ap- seemingly minor variations can have a large im-
+
+plying pact on the success of word representation meth-
+neg > 1 depends on the type of task:
+
+word similarity or analogy. Another example is ods. By showing how to adapt and tune these hy-
+
+dynamic context windows (dyn), which is benefi- perparameters in traditional methods, we allow a
+
+cial for MSR’s analogy task, but largely detrimen- proper comparison between representations, and
+
+tal to other tasks. challenge various claims of superiority from the
+word embedding literature.
+
+It appears that the only hyperparameter that can
+be “blindly” applied in any situation is context This study also exposes the need for more
+
+distribution smoothing (cds = 0.75), yielding controlled-variable experiments, and extending
+
+a consistent improvement at an insignificant risk. the concept of “variable” from the obvious task,
+
+Note that cds helps PPMI more than it does other data, and method to the often ignored prepro-
+
+methods; we suggest that this is because it re- cessing steps and hyperparameter settings. We
+
+duces the relative impact of rare words on the dis- also stress the need for transparent and repro-
+
+tributional representation, thus addressing PMI’s ducible experiments, and commend authors such
+
+“Achilles’ heel”. as Mikolov, Pennington, and others for making
+their code publicly available. In this spirit, we
+
+10 make our code available as well.11
+This might also relate to PMI’s bias towards infrequent
+
+events (see Section 2.1). Broader windows create more ran-
+dom co-occurrences with rare words, “polluting” the distribu- 11http://bitbucket.org/omerlevy/
+tional vector with random words that have high PMI scores. hyperwords
+
+222
+
+
+
+Method win dyn sub neg cds w+c
+2 : 5 : 10 none : with none : dirty 1 : 5 : 15 1.00 : 0.75 only w : w + c
+
+PPMI 7 : 1 : 0 4 : 4 4 : 4 2 : 6 : 0 1 : 7 —
+SVD 7 : 1 : 0 4 : 4 1 : 7 8 : 0 : 0 2 : 6 7 : 1
+
+SGNS 2 : 3 : 3 6 : 2 4 : 4 0 : 4 : 4 3 : 5 4 : 4
+GloVe 1 : 3 : 4 6 : 2 7 : 1 — — 4 : 4
+
+Table 7: The impact of each hyperparameter, measured by the number of tasks in which the best configuration had that hyper-
+parameter setting. Non-applicable combinations are marked by “—”.
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Mul Mul
+PPMI +0.5% –1.0% 0.0% +0.1% +0.4% –0.1% –0.1% +1.2%
+SVD –0.8% –0.2% 0.0% +0.6% +0.4% –0.1% +0.6% +2.1%
+
+SGNS –0.9% –1.5% –0.3% +0.1% –0.1% –0.1% –1.0% +0.7%
+GloVe –0.8% –1.2% –0.9% –0.8% +0.1% –0.9% –3.3% +1.8%
+
+(a) Performance difference between best models with dyn = with and dyn = none.
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Mul Mul
+PPMI +0.6% +1.9% +1.3% +1.0% –3.8% –3.9% –5.0% –12.2%
+SVD +0.7% +0.2% +0.6% +0.7% +0.8% –0.3% +4.0% +2.4%
+
+SGNS +1.5% +2.2% +1.5% +0.1% –0.4% –0.1% –4.4% –5.4%
+GloVe +0.2% –1.3% –1.0% –0.2% –3.4% –0.9% –3.0% –3.6%
+
+(b) Performance difference between best models with sub = dirty and sub = none.
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Mul Mul
+PPMI +0.6% +4.9% +1.3% +1.0% +2.2% +0.8% –6.2% –9.2%
+SVD –1.7% –2.2% –1.9% –4.6% –3.4% –3.5% –13.9% –14.9%
+
+SGNS +1.5% +2.9% +2.3% +0.5% +1.5% +1.1% +3.3% +2.1%
+GloVe — — — — — — — —
+
+(c) Performance difference between best models with neg > 1 and neg = 1.
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Mul Mul
+PPMI +1.3% +2.8% 0.0% +2.1% +3.5% +2.9% +2.7% +9.2%
+SVD +0.4% –0.2% +0.1% +1.1% +0.4% –0.3% +1.4% +2.2%
+
+SGNS +0.4% +1.4% 0.0% +0.1% 0.0% +0.2% +0.6% 0.0%
+GloVe — — — — — — — —
+
+(d) Performance difference between best models with cds = 0.75 and cds = 1.
+
+WordSim WordSim Bruni et al. Radinsky et al. Luong et al. Hill et al. Google MSR
+Method
+
+Similarity Relatedness MEN M. Turk Rare Words SimLex Mul Mul
+PPMI — — — — — — — —
+SVD –0.6% –0.2% –0.4% –2.1% –0.7% +0.7% –1.8% –3.4%
+
+SGNS +1.4% +2.2% +1.2% +1.1% –0.3% –2.3% –1.0% –7.5%
+GloVe +2.3% +4.7% +3.0% –0.1% –0.7% –2.6% +3.3% –8.9%
+
+(e) Performance difference between best models with w+c = w + c and w+c = only w.
+
+Table 8: The added value versus the risk of setting each hyperparameter. The figures show the differences in performance
+between the best achievable configurations when restricting a hyperparameter to different values. This difference indicates the
+potential gain of tuning a given hyperparameter, as well as the risks of decreased performance when not tuning it. For example,
+an entry of +9.2% in Table (d) means that the best model with cds = 0.75 is 9.2% more accurate (absolute) than the best
+model with cds = 1; i.e. on MSR’s analogies, using cds = 0.75 instead of cds = 1 improved PPMI’s accuracy from .443
+to .535.
+
+223
+
+
+
+Acknowledgements Kenneth Ward Church and Patrick Hanks. 1990. Word
+association norms, mutual information, and lexicog-
+
+This work was supported by the Google Research raphy. Computational Linguistics, 16(1):22–29.
+Award Program and the German Research Foun-
+dation via the German-Israeli Project Cooperation Ronan Collobert and Jason Weston. 2008. A unified
+
+architecture for natural language processing: Deep
+(grant DA 1600/1-1). We thank Marco Baroni and neural networks with multitask learning. In Pro-
+Jeffrey Pennington for their valuable comments. ceedings of the 25th International Conference on
+
+Machine Learning, pages 160–167.
+
+References Scott C. Deerwester, Susan T. Dumais, Thomas K. Lan-
+dauer, George W. Furnas, and Richard A. Harshman.
+
+Eneko Agirre, Enrique Alfonseca, Keith Hall, Jana 1990. Indexing by latent semantic analysis. JASIS,
+Kravalova, Marius Pasca, and Aitor Soroa. 2009. 41(6):391–407.
+A study on similarity and relatedness using distribu-
+tional and wordnet-based approaches. In Proceed- C Eckart and G Young. 1936. The approximation of
+ings of Human Language Technologies: The 2009 one matrix by another of lower rank. Psychome-
+Annual Conference of the North American Chap- trika, 1:211–218.
+ter of the Association for Computational Linguistics,
+pages 19–27, Boulder, Colorado, June. Association Roi Reichart Felix Hill and Anna Korhonen. 2014.
+for Computational Linguistics. Simlex-999: Evaluating semantic models with
+
+(genuine) similarity estimation. arXiv preprint
+Marco Baroni and Alessandro Lenci. 2010. Dis- arXiv:1408.3456.
+
+tributional memory: A general framework for
+corpus-based semantics. Computational Linguis-
+tics, 36(4):673–721. Adriano Ferraresi, Eros Zanchetta, Marco Baroni, and
+
+Silvia Bernardini. 2008. Introducing and evaluating
+ukwac, a very large web-derived corpus of English.
+
+Marco Baroni, Georgiana Dinu, and Germán In Proceedings of the 4th Web as Corpus Workshop
+Kruszewski. 2014. Dont count, predict! a (WAC-4), pages 47–54.
+systematic comparison of context-counting vs.
+context-predicting semantic vectors. In Proceedings
+of the 52nd Annual Meeting of the Association Lev Finkelstein, Evgeniy Gabrilovich, Yossi Matias,
+for Computational Linguistics (Volume 1: Long Ehud Rivlin, Zach Solan, Gadi Wolfman, and Ey-
+Papers), pages 238–247, Baltimore, Maryland, tan Ruppin. 2002. Placing search in context: The
+June. Association for Computational Linguistics. concept revisited. ACM Transactions on Informa-
+
+tion Systems, 20(1):116–131.
+Yoshua Bengio, Réjean Ducharme, Pascal Vincent, and
+
+Christian Jauvin. 2003. A neural probabilistic lan- Yoav Goldberg and Omer Levy. 2014. word2vec
+guage model. Journal of Machine Learning Re- explained: deriving Mikolov et al.’s negative-
+search, 3:1137–1155. sampling word-embedding method. arXiv preprint
+
+arXiv:1402.3722.
+Elia Bruni, Gemma Boleda, Marco Baroni, and
+
+Nam Khanh Tran. 2012. Distributional semantics Zellig Harris. 1954. Distributional structure. Word,
+in technicolor. In Proceedings of the 50th Annual 10(23):146–162.
+Meeting of the Association for Computational Lin-
+guistics (Volume 1: Long Papers), pages 136–145, Omer Levy and Yoav Goldberg. 2014a. Dependency-
+Jeju Island, Korea, July. Association for Computa- based word embeddings. In Proceedings of the 52nd
+tional Linguistics. Annual Meeting of the Association for Computa-
+
+tional Linguistics (Volume 2: Short Papers), pages
+John A Bullinaria and Joseph P Levy. 2007. Extracting 302–308, Baltimore, Maryland.
+
+semantic representations from word co-occurrence
+statistics: a computational study. Behavior Research Omer Levy and Yoav Goldberg. 2014b. Linguistic
+Methods, 39(3):510–526. regularities in sparse and explicit word representa-
+
+tions. In Proceedings of the Eighteenth Confer-
+John A Bullinaria and Joseph P Levy. 2012. Extracting ence on Computational Natural Language Learning,
+
+semantic representations from word co-occurrence pages 171–180, Baltimore, Maryland.
+statistics: Stop-lists, stemming, and SVD. Behavior
+Research Methods, 44(3):890–907. Omer Levy and Yoav Goldberg. 2014c. Neural word
+
+embeddings as implicit matrix factorization. In Ad-
+John Caron. 2001. Experiments with LSA scor- vances in Neural Information Processing Systems
+
+ing: optimal rank and basis. In Proceedings of the 27: Annual Conference on Neural Information Pro-
+SIAM Computational Information Retrieval Work- cessing Systems 2014, December 8-13 2014, Mon-
+shop, pages 157–169. treal, Quebec, Canada, pages 2177–2185.
+
+224
+
+
+
+Minh-Thang Luong, Richard Socher, and Christo- Peter D. Turney and Patrick Pantel. 2010. From
+pher D. Manning. 2013. Better word representa- frequency to meaning: Vector space models of se-
+tions with recursive neural networks for morphol- mantics. Journal of Artificial Intelligence Research,
+ogy. In Proceedings of the Seventeenth Confer- 37(1):141–188.
+ence on Computational Natural Language Learning,
+pages 104–113, Sofia, Bulgaria, August. Associa- Peter D. Turney. 2012. Domain and function: A dual-
+tion for Computational Linguistics. space model of semantic relations and compositions.
+
+Journal of Artificial Intelligence Research, 44:533–
+Oren Melamud, Ido Dagan, Jacob Goldberger, Idan 585.
+
+Szpektor, and Deniz Yuret. 2014. Probabilistic
+modeling of joint-context in distributional similar- Torsten Zesch, Christof Müller, and Iryna Gurevych.
+ity. In Proceedings of the Eighteenth Conference on 2008. Using wiktionary for computing semantic
+Computational Natural Language Learning, pages relatedness. In Proceedings of the 23rd National
+181–190, Baltimore, Maryland, June. Association Conference on Artificial Intelligence - Volume 2,
+for Computational Linguistics. AAAI’08, pages 861–866. AAAI Press.
+
+Tomas Mikolov, Kai Chen, Gregory S. Corrado, and
+Jeffrey Dean. 2013a. Efficient estimation of word
+representations in vector space. In Proceedings of
+the International Conference on Learning Represen-
+tations (ICLR).
+
+Tomas Mikolov, Ilya Sutskever, Kai Chen, Gregory S.
+Corrado, and Jeffrey Dean. 2013b. Distributed rep-
+resentations of words and phrases and their compo-
+sitionality. In Advances in Neural Information Pro-
+cessing Systems, pages 3111–3119.
+
+Tomas Mikolov, Wen-tau Yih, and Geoffrey Zweig.
+2013c. Linguistic regularities in continuous space
+word representations. In Proceedings of the 2013
+Conference of the North American Chapter of the
+Association for Computational Linguistics: Human
+Language Technologies, pages 746–751.
+
+Sebastian Padó and Mirella Lapata. 2007.
+Dependency-based construction of semantic space
+models. Computational Linguistics, 33(2):161–199.
+
+Patrick Pantel and Dekang Lin. 2002. Discovering
+word senses from text. In Proceedings of the eighth
+ACM SIGKDD international conference on Knowl-
+edge discovery and data mining, pages 613–619.
+ACM.
+
+Jeffrey Pennington, Richard Socher, and Christopher
+Manning. 2014. Glove: Global vectors for word
+representation. In Proceedings of the 2014 Con-
+ference on Empirical Methods in Natural Language
+Processing (EMNLP), pages 1532–1543, Doha,
+Qatar, October. Association for Computational Lin-
+guistics.
+
+Kira Radinsky, Eugene Agichtein, Evgeniy
+Gabrilovich, and Shaul Markovitch. 2011. A
+word at a time: Computing word relatedness using
+temporal semantic analysis. In Proceedings of the
+20th international conference on World wide web,
+pages 337–346. ACM.
+
+Magnus Sahlgren. 2006. The Word-Space Model.
+Ph.D. thesis, Stockholm University.
+
+Peter D. Turney and Michael L. Littman. 2003. Mea-
+suring praise and criticism: Inference of semantic
+orientation from association. Transactions on Infor-
+mation Systems, 21(4):315–346.
+
+225
+
+
+
+226

@@ -1,0 +1,354 @@
+﻿Computational Natural Language Processing
+
+Conditioned Generation
+
+Hamidreza Mahyar
+mahyarh@mcmaster.ca
+
+
+
+Language Models
+• Language models are generative models of text
+
+s ~ P(x)
+
+“The Malfoys!” said Hermione.
+
+Harry was watching him. He looked like Madame Maxime. When she strode 
+up the wrong staircase to visit himself.
+
+“I’m afraid I’ve definitely been suspended from power, no chance—indeed?”
+said Snape. He put his head back behind them and read groups as they crossed
+a corner and fluttered down onto their ink lamp, and picked up his spoon. The
+doorbell rang. It was a lot cleaner down in London.
+
+Text Credit: Max Deutsch (https://medium.com/deep-writing/)
+
+
+
+Conditioned Language Models
+• Not just generate text, generate text according to 
+
+some specification
+
+Input X Output Y (Text) Task
+Structured Data NL Description NL Generation
+
+English Japanese Translation 
+Document Short Description Summarization 
+Utterance Response Response Generation 
+
+Image Text Image Captioning 
+Speech Transcript Speech Recognition
+
+
+
+Formulation and Modeling
+
+
+
+Calculating the Probability of 
+a Sentence
+
+
+
+Conditional Language 
+Models
+
+
+
+(One Type of)Language Model
+(Mikolov et al. 2011)
+
+<s> I hate this movie
+
+LSTM LSTM LSTM LSTM LSTM
+
+predict predict predict predict predict
+
+I hate this movie </s>
+
+
+
+(One Type of)Conditional Language Model
+(Sutskever et al. 2014)
+
+Encoder
+kono eiga ga kirai </s>
+
+LSTM LSTM LSTM LSTM LSTM
+
+I hate this movie
+
+LSTM LSTM LSTM LSTM
+
+argmax argmax argmax argmax argmax
+
+I hate this movie </s>
+Decoder
+
+
+
+How to Pass Hidden State?
+• Initialize decoder w/ encoder (Sutskever et al. 2014)
+
+encoder decoder
+
+• Transform (can be different dimensions)
+encoder transform decoder
+
+• Input at every time step (Kalchbrenner & Blunsom 2013)
+
+decoder decoder decoder
+
+encoder
+
+
+
+Methods of Generation
+
+
+
+The Generation Problem
+• We have a model of P(Y|X), how do we use it to 
+
+generate a sentence?
+
+• Two methods:
+
+• Sampling: Try to generate a random sentence 
+according to the probability distribution.
+
+• Argmax: Try to generate the sentence with the
+highest probability.
+
+
+
+Ancestral Sampling
+
+• Randomly generate words one-by-one.
+
+• An exact method for sampling from P(X), no further 
+work needed.
+
+
+
+Greedy Search
+• One by one, pick the single highest-probability word
+
+• Not exact, real problems:
+
+• Will often generate the “easy” words first
+
+• Will prefer multiple common words to one rare word
+
+
+
+Beam Search
+• Instead of picking one high-probability word, 
+
+maintain several paths
+
+• Some in reading materials, more in a later class
+
+
+
+Model Ensembling
+
+
+
+Ensembling
+• Combine predictions from multiple models
+
+<s> <s>
+
+LSTM1 LSTM2
+
+predict1 predict2
+
+I
+• Why?
+
+• Multiple models make somewhat uncorrelated errors
+• Models tend to be more uncertain when they are about to make errors
+• Smooths over idiosyncrasies of the model
+
+
+
+Linear Interpolation
+• Take a weighted average of the M model probabilities
+
+• Second term often set to uniform distribution 1/M
+
+
+
+Log-linear Interpolation
+• Weighted combination of log probabilities, normalize
+
+• Interpolation coefficient often set to uniform distribution 1/M
+
+
+
+Linear or Log Linear?
+• Think of it in logic!
+• Linear: “Logical OR”
+
+• the interpolated model likes any choice that a model gives a 
+high probability
+
+• use models with models that capture different traits
+• necessary when any model can assign zero probability
+
+• Log Linear: “Logical AND”
+• interpolated model only likes choices where all models agree
+• use when you want to restrict possible answers
+
+
+
+Parameter Averaging
+• Problem: Ensembling means we have to use M
+
+models at test time, increasing our time/memory
+complexity
+
+• Parameter averaging is a cheap way to get some 
+good effects of ensembling
+
+• Basically, write out models several times near the 
+end of training, and take the average of parameters
+
+
+
+Ensemble Distillation 
+(e.g. Kim et al. 2016)
+
+• Problem: parameter averaging only works for models 
+within the same run
+
+• Knowledge distillation trains a model to copy the 
+ensemble
+
+• Specifically, it tries to match the description over 
+predicted words
+
+• Why? We want the model to make the same mistakes as 
+an ensemble
+
+• Shown to increase accuracy notably
+
+
+
+Stacking
+
+• What if we have two very different models where 
+prediction of outputs is done in very different ways?
+
+• e.g. a phrase-based translation model and a neural 
+MT model (Niehues et al. 2017)
+
+• Stacking uses the output of one system in 
+calculating features for another system
+
+
+
+Case Studies in Conditional 
+Language Modeling
+
+
+
+From Images
+(e.g. Karpathy et al. 2015)
+
+• Input is image features, output is text
+
+• Use standard image encoders (e.g. CNN)
+
+• Often pre-trained on large databases such as ImageNet
+
+
+
+Check out this review paper:
+
+
+
+How do we Evaluate?
+
+
+
+Basic Evaluation Paradigm
+
+• Use parallel test set
+
+• Use system to generate translations
+
+• Compare target translations w/ reference
+
+
+
+Human Evaluation
+• Ask a human to do evaluation
+
+• Final goal, but slow, expensive, and sometimes inconsistent
+
+
+
+BLEU
+• Works by comparing n-gram overlap w/ reference
+
+• Pros: Easy to use, good for measuring system improvement
+
+• Cons: Often doesn’t match human eval, bad for comparing 
+very different systems
+
+
+
+Embedding-based Metrics
+• Recently, many metrics based on neural models
+
+• BertScore: Find similarity between BERT embeddings 
+(unsupervised) (Zhang et al. 2020)
+
+• BLEURT: Train BERT to predict human evaluation 
+scores (Sellam et al. 2020)
+
+• COMET: Train model to predict human eval, also using 
+source sentence (Rei et al. 2020)
+
+• PRISM: Model based on training paraphrasing model 
+(Thompson and Post 2020)
+
+
+
+Perplexity
+• Calculate the perplexity of the words in the held-out 
+
+set without doing generation
+
+• Pros: Naturally solves multiple-reference problem!
+
+• Cons: Doesn’t consider decoding or actually 
+generating output.
+
+• May be reasonable for problems with lots of 
+ambiguity.
+
+
+
+Which One to Use?
+• Meta-evaluation runs human evaluation and automatic 
+
+evaluation on the same outputs, calculates correlation
+
+• Examples:
+
+• WMT Metrics Task for MT (Mathur et al. 2021)
+
+• RealSumm for summarization ()
+
+• Evaluation is hard, especially with good systems! 
+Most metrics had no correlation w/ human eval over 
+best systems at some WMT 2019 tasks
+
+
+
+Questions?

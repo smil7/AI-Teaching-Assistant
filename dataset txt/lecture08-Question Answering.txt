@@ -1,0 +1,718 @@
+﻿Computational Natural Language Processing
+
+Question Answering
+
+Hamidreza Mahyar
+mahyarh@mcmaster.ca
+
+
+
+Lecture plan
+
+1. What is question answering?
+
+2. Reading comprehension
+✓ How to answer questions over a single passage of text
+
+3. Open-domain (textual) question answering
+✓ How to answer questions over a large collection of documents
+
+Assignment 3 is out!
+Start working on your final project!
+
+2
+
+
+
+1. What is question answering?
+
+Question (Q) Answer (A)
+
+The goal of question answering is to build systems that automatically answer 
+questions posed by humans in a natural language
+
+The earliest QA systems 
+dated back to 1960s!
+(Simmons et al., 1964)
+
+3
+
+
+
+Question answering: a taxonomy
+
+Question (Q) Answer (A)
+
+• What information source does a system build on?
+• A text passage, all Web documents, knowledge bases, tables, images..
+
+• Question type
+• Factoid vs non-factoid, open-domain vs closed-domain, simple vs compositional, ..
+
+• Answer type
+• A short segment of text, a paragraph, a list, yes/no, …
+
+4
+
+
+
+Lots of practical applications
+
+5
+
+
+
+Lots of practical applications
+
+6
+
+
+
+Lots of practical applications
+
+7
+
+
+
+2011: IBM Watson beat Jeopardy champions
+
+8
+
+
+
+IBM Watson beat Jeopardy champions
+
+Image credit: J & M, edition 3
+
+(1) Question processing, (2) Candidate answer generation, (3) Candidate answer scoring, and (4) 
+Confidence merging and ranking.
+
+9
+
+
+
+Question answering in deep learning era
+
+Image credit: (Lee et al., 2019)
+
+Almost all the state-of-the-art question answering systems are built on top of end-to-end 
+training and pre-trained language models (e.g., BERT)!
+
+10
+
+
+
+Beyond textual QA problems
+
+Today, we will mostly focus on how to answer questions based on unstructured text.
+
+Knowledge based QA
+
+Image credit: Percy Liang
+11
+
+
+
+Beyond textual QA problems
+
+Today, we will mostly focus on how to answer questions based on unstructured text.
+
+Knowledge based QA
+
+12
+
+
+
+Beyond textual QA problems
+
+Today, we will mostly focus on how to answer questions based on unstructured text.
+
+Visual QA
+
+(Antol et al., 2015): Visual Question Answering
+13
+
+
+
+2. Reading comprehension
+Reading comprehension = comprehend a passage of text and answer questions about its 
+content (P, Q)⟶ A
+
+Tesla was the fourth of five children. He had an older brother 
+named Dane and three sisters, Milka, Angelina and Marica. Dane 
+was killed in a horse-riding accident when Nikola was five. In 1861,
+Tesla attended the "Lower" or "Primary" School in Smiljan where
+he studied German, arithmetic, and religion. In 1862, the Tesla 
+family moved to Gospić, Austrian Empire, where Tesla's father 
+worked as a pastor. Nikola completed "Lower" or "Primary" School, 
+followed by the "Lower Real Gymnasium" or "Normal School."
+
+Q: What language did Tesla study while in school? 
+A: German
+
+14
+
+
+
+2. Reading comprehension
+Reading comprehension = comprehend a passage of text and answer questions about its 
+content (P, Q)⟶ A
+
+Kannada language is the official language of Karnataka and spoken as a native 
+language by about 66.54% of the people as of 2011. Other linguistic minorities in 
+the state were Urdu (10.83%), Telugu language (5.84%), Tamil language (3.45%),
+Marathi language (3.38%), Hindi (3.3%), Tulu language (2.61%), Konkani language
+(1.29%), Malayalam (1.27%) and Kodava Takk (0.18%). In 2007 the state had a
+birth rate of 2.2%, a death rate of 0.7%, an infant mortality rate of 5.5% and a
+maternal mortality rate of 0.2%. The total fertility rate was 2.2.
+
+Q: Which linguistic minority is larger, Hindi or Malayalam?
+
+A: Hindi
+15
+
+
+
+Why do we care about this problem?
+• Useful for many practical applications
+
+• Reading comprehension is an important testbed for evaluating how well computer systems understand 
+human language
+• Wendy Lehnert 1977: “Since questions can be devised to query any aspect of text comprehension, 
+
+the ability to answer questions is the strongest possible demonstration of understanding.”
+
+• Many other NLP tasks can be reduced to a reading comprehension problem:
+
+Information extraction Semantic role labeling
+(Barack Obama, educated_at, ?)
+
+Question: Where did Barack Obama graduate from?
+
+Passage: Obama was born in Honolulu, Hawaii. After 
+graduating from Columbia University in 1983, he 
+worked as a community organizer in Chicago.
+
+(Levy et al., 2017) (He et al., 2015)
+16
+
+
+
+Stanford question answering dataset (SQuAD)
+
+• 100k annotated (passage, question, answer) triples
+Large-scale supervised datasets are also a key ingredient for 
+training effective neural models for reading comprehension!
+
+• Passages are selected from English Wikipedia, usually 100~150 words.
+• Questions are crowd-sourced.
+
+• Each answer is a short segment of text (or span) in the passage.
+
+This is a limitation— not all the questions can be 
+answered in this way!
+
+• SQuAD was for years the most popular reading comprehension 
+dataset; it is “almost solved” today (though the underlying task is 
+not,) and the state-of-the-art exceeds the estimated human 
+performance.
+
+16
+(Rajpurkar et al., 2016): SQuAD: 100,000+ Questions for Machine Comprehension of Text
+
+
+
+Stanford question answering dataset (SQuAD)
+• Evaluation: exact match (0 or 1) and F1 (partial credit).
+• For development and testing sets, 3 gold answers are collected, because there could be multiple
+
+plausible answers.
+• We compare the predicted answer to each gold answer (a, an, the, punctuations are removed)
+
+and take max scores. Finally, we take the average of all the examples for both exact match and
+F1.
+
+• Estimated human performance: EM = 82.3, F1 = 91.2
+
+Q: What did Tesla do in December 1878?
+
+A: {left Graz, left Graz, left Graz and severed all relations with his family} 
+
+Prediction: {left Graz and served}
+
+Exact match: max{0, 0, 0} = 0
+F1: max{0.67, 0.67, 0.61} = 0.67
+
+18
+
+
+
+Stanford question answering dataset (SQuAD)
+
+19
+
+
+
+Other question answering datasets
+
+• TriviaQA: Questions and answers by trivia enthusiasts. Independently collected web 
+paragraphs that contain the answer and seem to discuss question, but no human 
+verification that paragraph supports answer to question
+
+• Natural Questions: Question drawn from frequently asked Google search questions. 
+Answers from Wikipedia paragraphs. Answer can be substring, yes, no, or NOT_PRESENT. 
+Verified by human annotation.
+
+• HotpotQA. Constructed questions to be answered from the whole of Wikipedia which 
+involve getting information from two pages to answer a multistep query:
+Q: Which novel by the author of “Armada” will be adapted as a feature film by Steven
+Spielberg? A: Ready Player One
+
+20
+
+
+
+Neural models for reading comprehension
+
+How can we build a model to solve SQuAD?
+(We are going to use passage, paragraph and context, as well as question and query interchangeably)
+
+• Problem formulation
+• Input: 𝐶 = (𝑐1, 𝑐2, … , 𝑐𝑁), 𝑄 = (𝑞1, 𝑞2, … , 𝑞𝑀), 𝑐𝑖, 𝑞𝑖 ∈ 𝑉 N~100, M ~15
+• Output: 1 ≤ start≤ end≤ 𝑁 answer is a span in the passage
+
+• A family of LSTM-based models with attention (2016–2018)
+
+Attentive Reader (Hermann et al., 2015), Stanford Attentive Reader (Chen et al., 2016), Match-LSTM
+(Wang et al., 2017), BiDAF (Seo et al., 2017), Dynamic coattention network (Xiong et al., 2017), DrQA
+(Chen et al., 2017), R-Net (Wang et al., 2017), ReasoNet (Shen et al., 2017)..
+
+• Fine-tuning BERT-like models for reading comprehension (2019+)
+
+21
+
+
+
+The Stanford Attentive Reader
+Input Output
+
+Q Which team won Super Bowl 50?
+
+Passage (P)
+
+Answer (A)
+
+Question (Q)
+
+…
+
+…
+
+…
+
+Which team won Super 50 ?
+
+
+
+Stanford Attentive Reader
+Q Who did Genghis Khan unite before he
+
+began conquering the rest of Eurasia?
+
+Bidirectional LSTMs
+
+… … … p̃𝑖
+
+P … … … p𝑖
+
+
+
+Stanford Attentive Reader
+Q Who did Genghis Khan unite before he
+
+began conquering the rest of Eurasia?
+
+Bidirectional LSTMs
+
+… … … p̃𝑖
+
+A:en;on Attention
+
+predict start token predict end token
+
+
+
+SQuAD 1.1 Results (single model, c. Feb 2017)
+F1
+
+Logistic regression 51.0
+
+Fine-Grained Gating (Carnegie Mellon U) 73.3
+
+Match-LSTM (Singapore Management U) 73.7
+
+DCN (Salesforce) 75.9
+
+BiDAF (UW & Allen Institute) 77.3
+
+Multi-Perspective Matching (IBM) 78.7
+
+ReasoNet (MSR Redmond) 79.4
+
+DrQA (Chen et al. 2017) 79.4
+
+r-net (MSR Asia) [Wang et al., ACL 2017] 79.7
+
+Google Brain / CMU (Feb 2018) 88.0
+
+Human performance 91.2
+
+Pretrained + Finetuned Models circa 2021 >93.0
+
+
+
+Stanford Attentive Reader+ +Figure from SLP3: Chapter 23
+
+Training objective:
+25
+
+
+
+(Chen et al., 2018)
+
+Stanford Attentive Reader++
+
+Q Which teamwonSuperBowl50?
+
+Deep 3 layer
+BiLSTM is better!
+
+…
+
+…
+
+…
+
+Which team won Super 50 ? 26
+
+
+
+Stanford Attentive Reader++
+
+𝐩_𝑖: Vector representation of each token in passage 
+Made from concatenation of
+• Word embedding (GloVe 300d)
+• Linguistic features: POS & NER tags, one-hot encoded
+• Term frequency (unigram probability)
+• Exact match: whether the word appears in the question
+• 3 binary features: exact, uncased, lemma
+• Aligned question embedding (“car” vs “vehicle”)
+
+𝑎𝑖,𝑗
+
+Where 𝛼 is a simple one layer FFNN
+
+
+
+
+
+
+BiDAF: the Bidirectional Attention Flow model
+
+30
+(Seo et al., 2017): Bidirectional Attention Flow for Machine Comprehension
+
+
+
+Attention visualization
+
+31
+
+
+
+LSTM-based vs BERT models
+
+Image credit: (Seo et al, 2017) Image credit: J & M, edition 3
+
+32
+
+
+
+BERT for reading comprehension
+• BERT is a deep bidirectional Transformer encoder pre-trained on large amounts of text 
+
+(Wikipedia + BooksCorpus)
+• BERT is pre-trained on two training objectives:
+
+• Masked language model (MLM)
+• Next sentence prediction (NSP)
+
+• BERTbasehas 12 layers and 110M parameters, BERTlarge has 24 layers and 330M parameters
+
+33
+
+
+
+BERT for reading comprehension
+
+Question = Segment A
+Passage = Segment B
+Answer = predicting two endpoints in segment B
+
+Image credit: https://mccormickml.com/
+
+where 𝐡𝑖 is the hidden vector of 𝑐𝑖, returned by BERT
+34
+
+
+
+BERT for reading comprehension
+
+• All the BERT parameters (e.g., 110M) as well as the 
+newly introduced parameters           (e.g.,
+768 x 2 = 1536) are optimized together for
+
+• It works amazing well. Stronger pre-trained language 
+models can lead to even better performance and SQuAD 
+becomes a standard dataset for testing pre-trained 
+models.
+
+F1 EM
+Human performance 91.2* 82.3*
+BiDAF 77.3 67.7
+BERT-base 88.5 80.8
+BERT-large 90.9 84.1
+XLNet 94.5 89.0
+RoBERTa 94.6 88.9
+ALBERT 94.8 89.3
+
+(dev set, except for human performance) 35
+
+
+
+Comparisons between BiDAF and BERT models
+
+• BERT model has many many more parameters (110M or 330M) 
+BiDAF has ~2.5M parameters.
+
+• BiDAF is built on top of several bidirectional LSTMs while BERT is built on top of 
+Transformers (no recurrence architecture and easier to parallelize).
+
+• BERT is pre-trained while BiDAF is only built on top of GloVe (and all the remaining 
+parameters need to be learned from the supervision datasets).
+
+Pre-training is clearly a game changer but it is expensive..
+
+36
+
+
+
+Can we design better pre-training objectives?
+
+The answer is yes!
+
+Two ideas:
+- masking contiguous spans of words instead of 15% random words
+- using the two end points of span to predict all the masked words in between = compressing the 
+
+information of a span into its two endpoints
+
+(Joshi & Chen et al., 2020): SpanBERT: Improving Pre-training by Representing and Predicting Spans 37
+
+
+
+SpanBERT performance
+
+Google BERT Our BERT
+
+SpanBERT
+F1 scores
+
+95 94.6
+91.3 92.6
+
+88.7
+88 85.9
+
+83.3 83.6 84.8
+81.7 81.8 83.0 82.8
+
+80.5 79.9 80.5
+80 79.0
+
+77.5 78.3
+
+73.6
+73 71.0
+
+68.8
+
+65
+SQuAD v1.1 SQuAD v2.0 NewsQA TriviaQA SearchQA HotpotQA Natural Questions
+
+38
+
+
+
+Is reading comprehension solved?
+• We have already surpassed human performance on SQuAD. Does it mean that reading 
+
+comprehension is already solved? Of course not!
+
+• The current systems still perform poorly on adversarial examples or examples from out-of-domain 
+distributions
+
+(Jia and Liang, 2017): Adversarial Examples for Evaluating Reading Comprehension Systems 39
+
+
+
+Is reading comprehension solved?
+
+Systems trained on one dataset can’t generalize to other datasets:
+
+(Sen and Saffari, 2020): What do Models Learn from Question Answering Datasets? 40
+
+
+
+Is reading comprehension solved?
+BERT-large model trained on SQuAD
+
+(Ribeiro et al., 2020): Beyond Accuracy: Behavioral Testing of NLP Models with CheckList 41
+
+
+
+Is reading comprehension solved?
+BERT-large model trained on SQuAD
+
+(Ribeiro et al., 2020): Beyond Accuracy: Behavioral Testing of NLP Models with CheckList 42
+
+
+
+3. Open-domain question answering
+
+Question (Q) Answer (A)
+
+• Different from reading comprehension, we don’t assume a given passage.
+
+• Instead, we only have access to a large collection of documents (e.g., Wikipedia). We don’t 
+know where the answer is located, and the goal is to return the answer for any open-domain 
+questions.
+
+• Much more challenging and a more practical problem!
+
+In contrast to closed-domain systems that deal with questions under a 
+specific domain (medicine, technical support).
+
+43
+
+
+
+Retriever-reader framework
+
+How many of Warsaw's inhabitants  
+spoke Polish in 1933?
+
+Document  Document  
+Retriever Reader
+
+833,500
+
+https://github.com/facebookresearch/DrQA
+
+Chen et al., 2017. Reading Wikipedia to Answer Open-domain Questions 44
+
+
+
+Retriever-reader framework
+
+• Input: a large collection of documents𝒟 = 𝐷1 , 𝐷2 , … , 𝐷𝑁 and Q
+• Output: an answer string A
+
+• Retriever: 𝑓(𝒟, 𝑄) ⟶ 𝑃1, … , 𝑃𝐾 K is pre-defined (e.g., 100)
+• Reader: 𝑔(𝑄, {𝑃1, … , 𝑃𝐾}) ⟶ 𝐴 A reading comprehension problem!
+
+In DrQA,
+• Retriever = A standard TF-IDF information-retrieval sparse model (a fixed module)
+• Reader = a neural reading comprehension model that we just learned
+
+• Trained on SQuAD and other distantly-supervised QA datasets
+
+Distantly-supervised examples: (Q, A)⟶ (P, Q, A)
+
+Chen et al., 2017. Reading Wikipedia to Answer Open-domain Questions 45
+
+
+
+We can train the retriever too
+• Joint training of retriever and reader
+
+• Each text passage can be encoded as a vector using BERT and the retriever score can be measured as 
+the dot product between the question representation and passage representation.
+
+• However, it is not easy to model as there are a huge number of passages (e.g., 21M in English Wikipedia)
+
+Lee et al., 2019. Latent Retrieval for Weakly Supervised Open Domain Question Answering 46
+
+
+
+We can train the retriever too
+• Dense passage retrieval (DPR) - We can also just train the retriever using question-answer pairs!
+
+• Trainable retriever (using BERT) largely outperforms traditional IR retrieval models
+
+Karpukhin et al., 2020. Dense Passage Retrieval for Open-Domain Question Answering 47
+
+
+
+We can train the retriever too
+
+http://qa.cs.washington.edu:2020/
+
+Karpukhin et al., 2020. Dense Passage Retrieval for Open-Domain Question Answering 48
+
+
+
+Dense retrieval + generative models
+Recent work shows that it is beneficial to generate answers instead of to extract answers.
+
+Fusion-in-decoder (FID) = DPR + T5
+
+Izacard and Grave 2020. Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering 49
+
+
+
+Large language models can do open-domain QA well
+
+• … without an explicit retriever stage
+
+Roberts et al., 2020. How Much Knowledge Can You Pack Into the Parameters of a Language Model? 50
+
+
+
+Maybe the reader model is not necessary too!
+
+It is possible to encode all the phrases (60 billion phrases in Wikipedia) using dense vectors and 
+only do nearest neighbor search without a BERT model at inference time!
+
+Seo et al., 2019. Real-Time Open-Domain Question Answering with Dense-Sparse Phrase Index 
+Lee et al., 2020. Learning Dense Representations of Phrases at Scale 51
+
+
+
+Large language model-based
+QA (with web search!)
+
+
+
+Problems with large language model-based QA
+
+Seems unreasonable!
+
+(1) It could not search   
+G-Scholar, and
+
+(2) the follow up 
+suggestions make no 
+sense. Yikes! 
+
+53

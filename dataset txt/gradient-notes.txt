@@ -1,0 +1,504 @@
+﻿Computing Neural Network Gradients
+
+Kevin Clark
+
+1 Introduction
+
+The purpose of these notes is to demonstrate how to quickly compute neural
+network gradients in a completely vectorized way. It is complementary to the
+last part of lecture 3 in CS224n 2019, which goes over the same material.
+
+2 Vectorized Gradients
+
+While it is a good exercise to compute the gradient of a neural network with re-
+spect to a single parameter (e.g., a single element in a weight matrix), in practice
+this tends to be quite slow. Instead, it is more efficient to keep everything in ma-
+trix/vector form. The basic building block of vectorized gradients is the Jacobian
+Matrix. Suppose we have a function f : Rn → Rm that maps a vector of length n
+to a vector of length m: f(x) = [f1(x1, ..., xn), f2(x1, ..., xn), ..., fm(x1, ..., xn)].
+Then its Jacobian is the following m× n matrix:
+
+
+∂f  ∂f1 ∂f 1
+
+∂x . . .
+1 ∂xn
+
+=  .. .
+. . .
+
+. . 
+∂x . 
+
+∂fm
+∂x . . . ∂fm
+
+1 ∂xn
+
+That is, (∂f ∂
+∂x )ij = fi
+
+∂x (which is just a standard non-vector derivative). The
+j
+
+Jacobian matrix will be useful for us because we can apply the chain rule to a
+vector-valued function just by multiplying Jacobians.
+
+As a little illustration of this, suppose we have a function f(x) = [f1(x), f2(x)]
+taking a scalar to a vector of size 2 and a function g(y) = [g1(y1, y2), g2(y1, y2)]
+taking a vector of size two to a vector of size two. Now let’s compose them to
+get g(x) = [g1(f1(x), f2(x)), g2(f1(x), f2(x))]. Using the regular chain rule, we
+can compute the deriv[ative of g as the Ja]cob[ian ]
+
+∂g ∂ ∂g1 ∂f1 ∂g1 ∂f
+g (f ( ) f ( )
+
+= ∂x 1 1 x , 2 x ) 2
+∂f1 ∂x + ∂f2 ∂x
+
+∂ ∂ =
+x ∂xg2(f1(x), f2(x)) ∂g2 ∂f1 ∂g ∂f
+
+∂f + 2 2
+
+1 ∂x ∂f2 ∂x
+
+1
+
+
+
+And we see this is the same as multiply[ing the tw]o Jacobians:
+
+∂g ∂g [ ]
+∂g ∂g ∂f 1 1 ∂f1
+
+= = ∂f1 ∂f2 ∂x
+∂x ∂f ∂x ∂g2 ∂g2 ∂f2
+
+∂f1 ∂f2 ∂x
+
+3 Useful Identities
+
+This section will now go over how to compute the Jacobian for several simple
+functions. It will provide some useful identities you can apply when taking neu-
+ral network gradients.
+
+(1) Matrix times column vector with respect to the column vector
+(z = Wx, what is ∂z
+
+∂x?)
+
+Suppose W ∈ Rn×m. Then we can think of z as a function of x taking an
+m-dimensional vector to an n-dimensional vector. So its Jacobian will be
+n×m. Note that ∑m
+
+zi = Wikxk
+k=1
+
+So an entry ( ∂z
+∂x )ij of the Jacobian will be
+
+m
+∂z ∂zi ∂ ∑ ∑m ∂
+
+( )ij = = Wikxk = Wik xk = Wij
+∂x ∂xj ∂xj ∂xj
+
+k=1 k=1
+
+∂z
+because ∂
+
+∂x xk = 1 if k = j and 0 if otherwise. So we see that = W
+j ∂x
+
+(2) Row vector times matrix with respect to the row vector
+(z = xW , what is ∂z
+
+∂x?)
+
+∂z
+A computation similar to (1) shows that = W T .
+
+∂x
+
+(3) A vector with itself
+(z = x, what is ∂z
+
+∂x? )
+We have zi = xi. So {
+
+∂z ∂zi ∂ 1 if i = j
+( )ij = = xi =
+∂x ∂xj ∂xj 0 if otherwise
+
+So we see that the Jacobian ∂z
+∂x is a diagonal matrix where the entry at (i, i)
+
+∂z
+is 1. This is just the identity matrix: = I . When applying the chain
+
+∂x
+
+2
+
+
+
+rule, this term will disappear because a matrix or vector multiplied by the
+identity matrix does not change.
+
+(4) An elementwise function applied a vector
+(z = f(x), what is ∂z
+
+∂x? )
+Since f is being applied elementwise, we h{ave zi = f(xi). So
+
+∂z ∂zi ∂ f ′(xi) if i = j
+( )ij = = f(xi) =
+∂x ∂xj ∂xj 0 if otherwise
+
+So we see that the Jacobian ∂z
+∂x is a diagonal matrix where the entry at (i, i)
+
+∂z
+is the derivative of f applied to xi. We can write this as = diag(f ′(x)) .
+
+∂x
+Since multiplication by a diagonal matrix is the same as doing elementwise
+multiplication by the diagonal, we could also write ◦f ′(x) when applying
+the chain rule.
+
+(5) Matrix times column vector with respect to the matrix
+(z = Wx, δ = ∂J
+
+∂z what is ∂J
+∂W = ∂J ∂z
+
+∂ ∂W = δ ∂z
+z ∂W ?)
+
+This is a bit more complicated than the other identities. The reason for in-
+cluding ∂J
+
+∂z in the above problem formulation will become clear in a moment.
+
+First suppose we have a loss function J (a scalar) and are computing its
+gradient with respect to a matrix W ∈ Rn×m. Then we could think of J as
+a function of W taking nm inputs (the entries of W ) to a single output (J).
+This means the Jacobian ∂J
+
+∂W would be a 1 × nm vector. But in practice
+this is not a very useful way of arranging the gradient. It would be much
+nicer if the derivatives were ina n×m matrix like this:
+
+∂J  ∂J . . . ∂J 
+1
+
+=  ∂W 1 ∂W1m
+.. .
+. . . 
+
+∂W . .. 
+∂J ∂J
+
+∂W . . .
+n1 ∂Wnm
+
+Since this matrix has the same shape as W , we could just subtract it (times
+the learning rate) fromW when doing gradient descent. So (in a slight abuse
+of notation) let’s find this matrix as ∂J
+
+∂W instead.
+
+This way of arranging the gradients becomes complicated when computing
+∂z
+∂W . Unlike J , z is a vector. So if we are trying to rearrange the gradients
+like with ∂J
+
+∂W , ∂z
+∂W would be an n ×m × n tensor! Luckily, we can avoid
+
+the issue by taking the gradient with respect to a single weight Wij instead.
+
+3
+
+
+
+∂z
+∂W is just a vector, which is much easier to deal with. We have
+
+ij
+
+∑m
+zk = Wklxl
+
+∑l=1
+m
+
+∂zk ∂
+= xl Wkl
+
+∂Wij ∂Wij
+l=1
+
+Note that ∂
+∂W Wkl = 1 if i = k and j = l and 0 if otherwise. So if k 6= i
+
+ij
+
+everything in the sum is zero and the gradient is zero. Otherwise, the only
+nonzero element of the sum is when l = j, so we just get xj . Thus we find
+∂zk
+∂W = xj if k = i and 0 if otherwis
+
+ e. Another way of writing this is
+ij
+
+ 0
+
+ .. 
+ . 
+
+=  0
+∂z x j∂W  
+
+ij
+
+ 0 ← ith element
+
+. .. 
+0
+
+Now let’s compute ∂J
+∂Wij
+
+m
+∂J ∂J ∂z ∂z ∑ ∂zk
+
+= = δ = δk = δixj
+∂Wij ∂z ∂Wij ∂Wij ∂Wij
+
+k=1
+
+(the only nonzero term in the sum is δ ∂zi
+i ∂W ). To get ∂J
+
+i ∂W we want a ma-
+j
+
+trix where entry (i, j) is δixj . This matrix is equal to the outer product
+∂J
+
+= δTxT
+
+∂W
+
+(6) Row vector time matrix with respect to the matrix
+(z = xW , δ = ∂J
+
+∂z what is ∂J
+∂W = δ ∂z
+
+∂W ?)
+∂J
+
+A similar computation to (5) shows that = xT δ .
+∂W
+
+(7) Cross-entropy loss with respect to logits (ŷ = softmax(θ), J =
+CE(y, ŷ), what is ∂J
+
+∂θ ?)
+
+∂J
+The gradient is = ŷ − y
+
+∂θ
+(or (ŷ − y)T if y is a column vector).
+
+4
+
+
+
+These identities will be enough to let you quickly compute the gradients for many
+neural networks. However, it’s important to know how to compute Jacobians
+for other functions as well in case they show up. Some examples if you want
+practice: dot product of two vectors, elementwise product of two vectors, 2-norm
+of a vector. Feel free to use these identities in the assignments. One option is
+just to memorize them. Another option is to figure them out by looking at the
+dimensions. For example, only one ordering/orientation of δ and x will produce
+the correct shape for ∂J
+
+∂W (assuming W is not square).
+
+4 Gradient Layout
+
+Jacobean formulation is great for applying the chain rule: you just have to mul-
+tiply the Jacobians. However, when doing SGD it’s more convenient to follow
+the convention “the shape of the gradient equals the shape of the parameter”
+(as we did when computing ∂J
+
+∂W ). That way subtracting the gradient times the
+learning rate from the parameters is easy. We expect answers to homework
+questions to follow this convention. Therefore if you compute the gradient
+of a column vector using Jacobian formulation, you should take the transpose
+when reporting your final answer so the gradient is a column vector. Another
+option is to always follow the convention. In this case the identities may not
+work, but you can still figure out the answer by making sure the dimensions of
+your derivatives match up. Up to you which of these options you choose!
+
+5 Example: 1-Layer Neural Network
+
+This section provides an example of computing the gradients of a full neural
+network. In particular we are going to compute the gradients of a one-layer
+neural network trained with cross-entropy loss. The forward pass of the model
+is as follows:
+
+x = input
+z = Wx+ b1
+h = ReLU(z)
+
+θ = Uh+ b2
+ŷ = softmax(θ)
+
+J = CE(y, ŷ)
+
+It helps to break up the model into the simplest parts possible, so note that
+we defined z and θ to split up the activation functions from the linear trans-
+formations in the network’s layers. The dimensions of the model’s parameters
+are
+
+x ∈ RDx×1 b1 ∈ RDh×1 W ∈ RDh×Dx b2 ∈ RNc×1 U ∈ RNc×Dh
+
+where Dx is the size of our input, Dh is the size of our hidden layer, and Nc is
+the number of classes.
+
+5
+
+
+
+In this example, we will compute all of the network’s gradients:
+
+∂J ∂J ∂J ∂J ∂J
+∂U ∂b2 ∂W ∂b1 ∂x
+
+To start with, recall that R{eLU(x) = max(x, 0). This means
+
+ReLU′
+1 if x > 0
+
+(x) = = sgn(ReLU(x))
+0 if otherwise
+
+where sgn is the signum function. Note that we are able to write the derivative
+of the activation in terms of the activation itself.
+
+Now let’s write out the chain rule for ∂J
+∂U and ∂J
+
+∂b :
+2
+
+∂J ∂J ∂ŷ ∂θ
+=
+
+∂U ∂ŷ ∂θ ∂U
+∂J ∂J ∂ŷ ∂θ
+
+=
+∂b2 ∂ŷ ∂θ ∂b2
+
+Notice that ∂J ∂ŷ ∂J
+∂ŷ ∂θ = ∂θ is present in both gradients. This makes the math a bit
+
+cumbersome. Even worse, if we’re implementing the model without automatic
+differentiation, computing ∂J
+
+∂θ twice will be inefficient. So it will help us to define
+some variables to represent the intermediate derivatives:
+
+∂J ∂J
+δ1 = δ2 =
+
+∂θ ∂z
+
+These can be thought as the error signals passed down to θ and z when doing
+backpropagation. We can compute them as follows:
+
+∂J
+δ1 = = (ŷ − y)T this is just identity (7)
+
+∂θ
+∂J ∂J ∂θ ∂h
+
+δ2 = = using the chain rule
+∂z ∂θ ∂h ∂z
+∂θ ∂h
+
+= δ1 substituting in δ1
+∂h ∂z
+∂h
+
+= δ1 U using identity (1)
+∂z
+
+= δ1 U ◦ ReLU′(z) using identity (4)
+
+= δ1 U ◦ sgn(h) we computed this earlier
+
+A good way of checking our work is by looking at the dimensions of the Jaco-
+bians:
+
+∂J
+= δ1 U ◦ sgn(h)
+
+∂z
+(1×Dh) (1×Nc) (Nc ×Dh) (Dh)
+
+6
+
+
+
+We see that the dimensions of all the terms in the gradient match up (i.e., the
+number of columns in a term equals the number of rows in the next term). This
+will always be the case if we computed our gradients correctly.
+
+Now we can use the error terms to compute our gradients. Note that we trans-
+pose out answers when computing the gradients for column vectors terms to
+follow the shape convention.
+
+∂J ∂J ∂θ ∂θ
+= = δ T
+
+1 = δ
+∂ ∂θ ∂U ∂U 1 h
+
+T using identity (5)
+U
+∂J ∂J ∂θ ∂θ
+
+= = δ1 = δT
+∂b ∂θ ∂b 1 using identity (3) and transposing
+
+2 2 ∂b2
+∂J ∂J ∂z ∂z
+
+= = δ T
+2 = δ
+
+∂ ∂θ ∂W ∂W 2 x
+T using identity (5)
+
+W
+∂J ∂J ∂z ∂z
+
+= = δ2 = δT
+∂b ∂θ ∂b 2 using identity (3) and transposing
+
+1 1 ∂b1
+∂J ∂J ∂z
+
+= = (δ2W )T using identity (1) and transposing
+∂x ∂θ ∂x
+
+7

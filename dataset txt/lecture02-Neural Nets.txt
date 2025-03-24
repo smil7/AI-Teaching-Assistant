@@ -1,0 +1,1055 @@
+﻿Computational Natural Language Processing
+
+Neural Networks: Gradients and Backpropagation
+
+Hamidreza Mahyar
+mahyarh@mcmaster.ca
+
+
+
+Binary classification for center word being location
+
+• We do supervised training and want high score if it’s a location
+
+1
+𝐽𝑡 𝜃 = 𝜎 𝑠 = 1 + 𝑒 - 𝑠
+
+predicted model 
+probability of class
+
+f = Some element-
+wise non-linear 
+function, e.g., 
+logistic, tanh, ReLU
+
+∈ R5d
+
+x = [ xmuseums xin xParis xare xamazing ] Embedding of 
+1-hot words
+
+2
+
+
+
+Neural computation
+
+Original McCulloch & Pitts 
+1943 threshold unit:
+𝟏(𝑊𝑥 > 𝜃) = 𝟏(𝑊𝑥 − 𝜃 > 0)
+
+This function has no slope,
+so, no gradient-based learning
+
+3
+
+
+
+Non-linearities, old and new
+(Rectified Linear Unit) Leaky ReLU / 
+
+logistic (“sigmoid”) tanh hard tanh ReLU Parametric ReLU
+
+ReLU	 𝑧 = max(𝑧, 0)
+
+1 1
+
+0
+0
+
+0 −1
+
+tanh is just a rescaled and shifted sigmoid (2×as steep, [−1,1]): Swish arXiv:1710.05941 GELU arXiv:1606.08415
+tanh(z) = 2logistic(2z)-1 swish 𝑥 = 𝑥 . logistic(𝑥) GELU 𝑥
+
+= 𝑥 .	𝑃 𝑋 ≤ 𝑥 , 𝑋~𝑁(0,1)
+Logistic and tanh are still used (e.g., logistic to get a probability) ≈ 𝑥 .	logistic(1.702𝑥)
+However, now, for deep networks, the first thing to try is ReLU: it 
+trains quickly and performs well due to good gradient backflow.
+ReLU has a negative “dead zone” that recent proposals mitigate 0
+GELU is frequently used with Transformers (BERT, RoBERTa, etc.)
+
+
+
+Non-linearities (i.e., “f ” on previous slide): Why they’re needed
+
+• Neural networks do function approximation, 
+e.g., regression or classification
+• Without non-linearities, deep neural networks 
+
+can’t do anything more than a linear transform
+• Extra layers could just be compiled down into a 
+
+single linear transform: W1 W2 x = Wx
+• But, with more layers that include non-linearities, 
+
+they can approximate any complex function!
+
+5
+
+
+
+Training with “cross entropy loss” – you use this in PyTorch!
+
+• Until now, our objective was stated as to maximize the probability of the correct class y
+or equivalently we can minimize the negative log probability of that class
+
+• Now restated in terms of cross entropy, a concept from information theory
+• Let the true probability distribution be p; let our computed model probability be q
+• The cross entropy is:
+
+• Assuming a ground truth (or true or gold or target) probability distribution that is 1 at 
+the right class and 0 everywhere else, p = [0, …, 0, 1, 0, …, 0], then:
+
+• Because of one-hot p, the only term left is the negative log probability of the true 
+class yi: − log 𝑝(𝑦i|𝑥i)
+
+Cross entropy can be used in other ways with a more interesting p,
+but for now just know that you’ll want to use it as the loss in PyTorch
+
+6
+
+
+
+Remember: Stochastic Gradient Descent
+Update equation:
+
+𝛼 = step size or learning rate
+
+i.e., for each parameter:
+
+In deep learning, 𝜃 includes the data representation (e.g., word vectors) too!
+
+How can we compute ∇ 𝜃 𝐽(𝜃)?
+1. By hand
+2. Algorithmically: the backpropagation algorithm
+
+7
+
+
+
+Lecture Plan
+
+Gradients
+1. Introduction
+2. Matrix calculus
+3. Backpropagation
+
+8
+
+
+
+Computing Gradients by Hand
+
+• Matrix calculus: Fully vectorized gradients
+• “Multivariable calculus is just like single-variable calculus if you use matrices”
+• Much faster and more useful than non-vectorized gradients
+• But doing a non-vectorized gradient can be good for intuition; recall the first 
+
+lecture for an example
+
+9
+
+
+
+Gradients
+
+• Given a function with 1 output and 1 input
+𝑓 𝑥 = 𝑥3
+
+• It’s gradient (slope) is its derivative
+𝑑 f = 3𝑥2
+𝑑𝑥
+
+“How much will the output change if we change the input a bit?”
+At x = 1 it changes about 3 times as much: 1.013 = 1.03 
+At x = 4 it changes about 48 times as much: 4.013 = 64.48
+
+10
+
+
+
+Gradients
+
+• Given a function with 1 output and n inputs
+
+• Its gradient is a vector of partial derivatives with 
+respect to each input
+
+11
+
+
+
+Jacobian Matrix: Generalization of the Gradient
+
+• Given a function with m outputs and n inputs
+
+• It’s Jacobian is an m x n matrix of partial derivatives
+
+12
+
+
+
+Chain Rule
+
+• For composition of one-variable functions: multiply derivatives
+
+• For multiple variables functions: multiply Jacobians
+
+13
+
+
+
+Example Jacobian: Elementwise activation Function
+
+14
+
+
+
+Example Jacobian: Elementwise activation Function
+
+Function has n outputs and n inputs → n by n Jacobian
+
+15
+
+
+
+Example Jacobian: Elementwise activation Function
+
+16
+
+
+
+Example Jacobian: Elementwise activation Function
+
+17
+
+
+
+Example Jacobian: Elementwise activation Function
+
+18
+
+
+
+Other Jacobians
+
+• Compute these at home for practice!
+• Check your answers with the lecture notes
+
+19
+
+
+
+Other Jacobians
+
+• Compute these at home for practice!
+• Check your answers with the lecture notes
+
+20
+
+
+
+Other Jacobians
+
+Fine print: This is the correct Jacobian. 
+Later we discuss the “shape convention”; 
+using it the answer would be h.
+
+• Compute these at home for practice!
+• Check your answers with the lecture notes
+
+21
+
+
+
+Other Jacobians
+
+• Compute these at home for practice!
+
+22
+
+
+
+Back to our Neural Net!
+
+x = [ xmuseums xin xParis xare xamazing ]
+23
+
+
+
+Back to our Neural Net!
+• Let’s find
+
+• Really, we care about the gradient of the loss Jt but we 
+will compute the gradient of the score for simplicity
+
+x = [ xmuseums xin xParis xare xamazing ]
+24
+
+
+
+1. Break up equations into simple pieces
+
+Carefully define your variables and keep track of their dimensionality!
+25
+
+
+
+2. Apply the chain rule
+
+26
+
+
+
+2. Apply the chain rule
+
+27
+
+
+
+2. Apply the chain rule
+
+28
+
+
+
+2. Apply the chain rule
+
+29
+
+
+
+3. Write out the Jacobians
+
+Useful Jacobians from previous slide
+
+30
+
+
+
+3. Write out the Jacobians
+
+𝒖𝑇
+
+Useful Jacobians from previous slide
+
+31
+
+
+
+3. Write out the Jacobians
+
+𝒖𝑇
+
+Useful Jacobians from previous slide
+
+32
+
+
+
+3. Write out the Jacobians
+
+𝒖𝑇
+
+Useful Jacobians from previous slide
+
+33
+
+
+
+3. Write out the Jacobians
+
+𝒖𝑇
+𝒖𝑇 .
+
+Useful Jacobians from previous slide
+
+⊙ = Hadamard product = 
+element-wise multiplication 
+of 2 vectors to give vector
+
+34
+
+
+
+Re-using Computation
+
+• Suppose we now want to compute
+• Using the chain rule again:
+
+35
+
+
+
+Re-using Computation
+
+• Suppose we now want to compute
+• Using the chain rule again:
+
+The same! Let’s avoid duplicated computation …
+
+36
+
+
+
+Re-using Computation
+
+• Suppose we now want to compute
+• Using the chain rule again:
+
+𝒖𝑇
+
+𝛿 is the upstream gradient (“error signal”)
+37
+
+
+
+Derivative with respect to Matrix: Output shape
+
+• What does look like?
+• 1 output, nm inputs: 1 by nm Jacobian?
+• Inconvenient to then do
+
+38
+
+
+
+Derivative with respect to Matrix: Output shape
+
+• What does look like?
+• 1 output, nm inputs: 1 by nm Jacobian?
+• Inconvenient to then do
+
+• Instead, we leave pure math and use the shape convention: 
+the shape of the gradient is the shape of the parameters!
+
+• So is n by m:
+
+39
+
+
+
+Derivative with respect to Matrix
+
+• What is
+• is going to be in our answer
+• The other term should be because
+
+• Answer is:
+
+𝛿 is upstream gradient (“error signal”) at 𝑧
+𝑥 is local input signal
+
+40
+
+
+
+Why the Transposes?
+
+• Hacky answer: this makes the dimensions work out!
+• Useful trick for checking your work!
+
+• Full explanation in the Goodflow book
+• Each input goes to each output – you want to get outer product
+
+41
+
+
+
+Deriving local input gradient in backprop
+
+• For in our equation:
+𝜕𝑠 = 𝜹 𝜕𝒛 = 𝜹 𝜕 (𝑾𝒙 + 𝒃)
+𝜕𝑾 𝜕𝑾 𝜕𝑾
+
+• Let’s consider the derivative of a single weight Wij
+
+• Wij only contributes to zi
+• For example: W23 is only s u2
+
+used to compute z2 not z1 f(z1)= h1 h2 =f(z2)
+W23
+
+b2
+
+x1 x2 x3 +1
+
+42
+
+
+
+3. Backpropagation
+
+We’ve almost shown you backpropagation
+It’s taking derivatives and using the (generalized, multivariate, or matrix) 
+chain rule
+
+Other trick:
+We re-use derivatives computed for higher layers in computing 
+derivatives for lower layers to minimize computation
+
+43
+
+
+
+Computation Graphs and Backpropagation
+
+• Software represents our neural 
+net equations as a graph
+• Source nodes: inputs
+• Interior nodes: operations
+
+ + 
+
+44
+
+
+
+Computation Graphs and Backpropagation
+
+• Software represents our neural 
+net equations as a graph
+• Source nodes: inputs
+• Interior nodes: operations
+• Edges pass along result of the 
+
+operation
+
+ + 
+
+45
+
+
+
+Computation Graphs and Backpropagation
+
+• Software represents our neural 
+net equations as a graph
+• Source nodes: inputs
+• “IFntoeriorrwnodaesr: odperaPtiornos pagation”
+• Edges pass along result of the
+
+operation
+
+ + 
+
+46
+
+
+
+Backpropagation
+
+• Then go backwards along edges
+• Pass along gradients
+
+ + 
+
+47
+
+
+
+Backpropagation: Single Node
+• Node receives an “upstream gradient”
+• Goal is to pass on the correct 
+
+“downstream gradient”
+
+Downstream  Upstream  
+51 gradient gradient
+
+
+
+Backpropagation: Single Node
+
+• Each node has a local gradient
+• The gradient of its output with 
+
+respect to its input
+
+Downstream  Local Upstream  
+49 gradient gradient gradient
+
+
+
+Backpropagation: Single Node
+
+• Each node has a local gradient
+• The gradient of its output with 
+
+respect to its input
+
+Chain  
+rule!
+
+Downstream  Local Upstream  
+50 gradient gradient gradient
+
+
+
+Backpropagation: Single Node
+
+• Each node has a local gradient
+• The gradient of its output with 
+
+respect to its input
+
+• [downstream gradient] = [upstream gradient] x [local gradient]
+
+Downstream  Local Upstream  
+51 gradient gradient gradient
+
+
+
+Backpropagation: Single Node
+• What about nodes with multiple inputs?
+
+*
+
+52
+
+
+
+Backpropagation: Single Node
+• Multiple inputs → multiple local gradients
+
+*
+
+Downstream  Local Upstream  
+gradients gradients gradient
+
+53
+
+
+
+An Example
+
+54
+
+
+
+An Example
+
+Forward prop steps
+
++
+
+*
+max
+
+55
+
+
+
+An Example
+
+Forward prop steps
+
+1
+
++ 3
+2
+
+6
+2 *
+
+2
+max
+
+0
+
+56
+
+
+
+An Example
+
+Forward prop steps Local gradients
+
+1
+
++ 3
+2
+
+6
+2 *
+
+2
+max
+
+0
+
+57
+
+
+
+An Example
+
+Forward prop steps Local gradients
+
+1
+
++ 3
+2
+
+6
+2 *
+
+2
+max
+
+0
+
+58
+
+
+
+An Example
+
+Forward prop steps Local gradients
+
+1
+
++ 3
+2
+
+6
+2 *
+
+2
+max
+
+0
+
+59
+
+
+
+An Example
+
+Forward prop steps Local gradients
+
+1
+
++ 3
+2
+
+6
+2 *
+
+2
+max
+
+0
+
+60
+
+
+
+An Example
+
+Forward prop steps Local gradients
+
+1
+
++ 3
+2
+
+1*2 = 2 6
+2 *
+
+2 1
+max 1*3 = 3
+
+0
+upstream * local = downstream
+
+61
+
+
+
+An Example
+
+Forward prop steps Local gradients
+
+1
+
++ 3
+2 2
+
+6
+2 *
+
+2 1
+3*1 = 3 max 3
+
+0
+3*0 = 0 upstream * local = downstream
+
+62
+
+
+
+An Example
+
+Forward prop steps Local gradients
+
+1
+2*1 = 2 + 3
+2 2
+2*1 = 2 6
+2 *
+
+2 1
+3 max 3
+0
+0 upstream * local = downstream
+
+66
+
+
+
+An Example
+
+Forward prop steps Local gradients
+
+1
+2 + 3
+2 2
+2 6
+2 *
+
+2 1
+3 max 3
+0
+0
+
+64
+
+
+
+Gradients sum at outward branches
+
++
+
+65
+
+
+
+Gradients sum at outward branches
+
++
+
+66
+
+
+
+Node Intuitions
+
+• + “distributes” the upstream gradient to each summand
+
+1
+2 + 3
+2 2
+2 6
+2 *
+
+2 1
+max
+
+0
+
+67
+
+
+
+Node Intuitions
+
+• + “distributes” the upstream gradient to each summand
+• max “routes” the upstream gradient
+
+1
+
++ 3
+2
+
+6
+2 *
+
+2 1
+3 max 3
+0
+0
+
+68
+
+
+
+Node Intuitions
+
+• + “distributes” the upstream gradient
+• max “routes” the upstream gradient
+• * “switches” the upstream gradient
+
+1
+
++ 3
+2 2
+
+6
+2 *
+
+2 1
+max 3
+
+0
+
+69
+
+
+
+Efficiency: compute all gradients at once
+
+• Incorrect way of doing backprop:
+• First compute
+
+* + 
+
+70
+
+
+
+Efficiency: compute all gradients at once
+
+• Incorrect way of doing backprop:
+• First compute
+• Then independently compute
+• Duplicated computation!
+
+* + 
+
+71
+
+
+
+Efficiency: compute all gradients at once
+
+• Correct way:
+• Compute all the gradients at once
+• Analogous to using 𝜹when we 
+
+computed gradients by hand
+
+* + 
+
+72
+
+
+
+Back-Prop in General Computation Graph
+1. Fprop: visit nodes in topological sort order
+
+Single scalar output - Compute value of node given predecessors
+2. Bprop:
+
+… - initialize output gradient = 1
+- visit nodes in reverse order:
+Compute gradient wrt each node using 
+
+gradient wrt successors
+… = successors of
+
+Done correctly, big O() complexity of fprop and 
+bprop is the same
+
+Inputs In general, our nets have regular layer-structure 
+and so we can use matrices and Jacobians…
+
+73
+
+
+
+Automatic Differentiation
+
+• The gradient computation can be 
+automatically inferred from the symbolic 
+expression of the fprop
+
+• Each node type needs to know how to 
+compute its output and how to compute 
+the gradient wrt its inputs given the 
+gradient wrt its output
+
+• Modern DL frameworks (Tensorflow, 
+PyTorch, etc.) do backpropagation for 
+you but mainly leave layer/node writer 
+to hand-calculate the local derivative
+
+74
+
+
+
+Backprop Implementations
+
+75
+
+
+
+Implementation: forward/backward API
+
+76
+
+
+
+Implementation: forward/backward API
+
+77
+
+
+
+Manual Gradient checking: Numeric Gradient
+
+• For small h (≈ 1e-4),
+• Easy to implement correctly
+• But approximate and very slow:
+• You have to recompute f for every parameter of our model
+
+• Useful for checking your implementation
+• In the old days, we hand-wrote everything, doing this everywhere was the key test
+• Now much less needed; you can use it to check layers are correctly implemented
+
+78
+
+
+
+Summary
+
+We’ve mastered the core technology of neural nets! 🎉 🎉 🎉
+
+• Backpropagation: recursively (and hence efficiently) apply the chain rule 
+along computation graph
+• [downstream gradient] = [upstream gradient] x [local gradient]
+
+• Forward pass: compute results of operations and save intermediate 
+values
+
+• Backward pass: apply chain rule to compute gradients
+
+79
+
+
+
+Why learn all these details about gradients?
+
+• Modern deep learning frameworks compute gradients for you!
+
+• But why take a class on compilers or systems when they are implemented for you?
+• Understanding what is going on under the hood is useful!
+
+• Backpropagation doesn’t always work perfectly out of the box
+• Understanding why is crucial for debugging and improving models
+• See Karpathy article:
+• https://medium.com/@karpathy/yes-you-should-understand-backprop-e2f06eab496b
+
+• Example in future lecture: exploding and vanishing gradients
+
+80
