@@ -1,0 +1,26 @@
+.App {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  transition: opacity 0.5s ease-in-out;
+  opacity: 0;
+}
+
+.fade-welcome .App,
+.fade-form .App,
+.fade-chatbot .App {
+  opacity: 1;
+}
+
+.fade-welcome {
+  opacity: 1;
+}
+
+.fade-form {
+  opacity: 1;
+}
+
+.fade-chatbot {
+  opacity: 1;
+} 

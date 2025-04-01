@@ -1,0 +1,111 @@
+.chatbot-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: white;
+  padding: 40px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.chatbox {
+  width: 80%;
+  /* max-width: 80%; */
+  min-height: 60%;
+  max-height: 80%;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.warning {
+  color: red;
+  font-weight: bold;
+}
+
+.chat-history {
+  max-height: 500px;
+  overflow-y: auto;
+  margin: 20px 0;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.chat-history.empty {
+  border: none; /* Hide border when empty */
+}
+
+.message {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.message-icon {
+  width: 30px;
+  height: 30px;
+  margin-right: 10px;
+}
+
+.message-text {
+  flex: 1;
+  text-align: left;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.message.user .message-text {
+  background-color: #e0e0e0;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.message.ai .message-text {
+  background-color: #d0e7ff;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.input-area {
+  display: flex;
+  align-items: stretch;
+  width: 100%; /* Match the width of the chat-history */
+}
+
+textarea {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+button {
+  background-color: #007bff;
+  border: none;
+  padding: 10px;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button img {
+  width: 20px;
+  height: 20px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .chatbox {
+    width: 95%;
+    min-height: 500px;
+  }
+} 
