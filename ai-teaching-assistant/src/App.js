@@ -1,49 +1,28 @@
 import React, { useState } from 'react';
-import './App.css';
-import botImage from './chatbot.jpg';
+import WelcomePage from './frontend/components/WelcomePage';
+import FormPage from './frontend/components/FormPage';
+import ChatbotInterface from './frontend/components/ChatbotInterface';
+import './frontend/styles/Transitions.css';
 
 function App() {
-  const [started, setStarted] = useState(false);
-  const [visible, setVisible] = useState(true);
+  const [page, setPage] = useState('welcome');
+  const [courseName, setCourseName] = useState('');
 
   const handleStart = () => {
-    setVisible(false);
-    setTimeout(() => {
-      setStarted(true);
-      setVisible(true);
-    }, 500); // Wait for the transition to complete
+    setPage('form');
+  };
+
+  const handleFormSubmit = (courseName, instructions) => {
+    // Here you would send the data to the backend
+    setCourseName(courseName);
+    setPage('chatbot');
   };
 
   return (
-    <div className="App" style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease-in-out' }}>
-      {!started ? (
-        <div className="welcome-container">
-          <img src={botImage} alt="AI Bot" className="bot-image" />
-          <div className="welcome-text">
-            <h1>Welcome student, I'm your custom Teaching Assistant. I'm happy to help!</h1>
-            <button onClick={handleStart} className="start-button">Start</button>
-          </div>
-        </div>
-      ) : (
-        <div className="form-container">
-          <h1>Welcome student, I'm your custom Teaching Assistant. I'm happy to help!</h1>
-          <form>
-            <div className="form-group">
-              <label htmlFor="courseName">Course or Chatbot Name:</label>
-              <input type="text" id="courseName" name="courseName" required />
-            </div>
-            <div className="form-group">
-              <label htmlFor="instructions">Additional Instructions (Optional):</label>
-              <textarea id="instructions" name="instructions"></textarea>
-            </div>
-            <div className="form-group">
-              <label htmlFor="courseMaterials">Upload Course Materials (Max 500MB):</label>
-              <input type="file" id="courseMaterials" name="courseMaterials" accept=".pdf,.doc,.docx,.txt" />
-            </div>
-            <button type="submit" className="submit-button">Submit</button>
-          </form>
-        </div>
-      )}
+    <div className={`App fade-${page}`}>
+      {page === 'welcome' && <WelcomePage onStart={handleStart} />}
+      {page === 'form' && <FormPage onSubmit={handleFormSubmit} />}
+      {page === 'chatbot' && <ChatbotInterface courseName={courseName} />}
     </div>
   );
 }
