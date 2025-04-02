@@ -48,8 +48,7 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
 
 3.**Download the Model**:
 The project uses `TheBloke/Llama-2-7b-Chat-GGUF` (Q4_K_M). It’s downloaded automatically to `models/` on first run via `hf_hub_download`.
-
-5. **Prepare Course Materials**:
+4. **Prepare Course Materials**:
 Add files (e.g., PDFs, CSVs, DOCX) to `SOURCE_DOCUMENTS/`.
 
 ## Usage
@@ -63,10 +62,19 @@ This splits files into 1000-character chunks (200-character overlap), embeds the
 Start the interactive command-line interface:
 `python fun_localGPT.py --device_type cpu --show_sources`
 
-Enter queries (e.g., "What’s in Lecture 1?") or type exit to quit.
+  Enter queries (e.g., "What’s in Lecture 1?") or type exit to quit.
 
 3. **Example Output**:
 `Enter a query: What’s the deadline for Assignment 2?`
 `> Question: What’s the deadline for Assignment 2?`
 `> Answer: The deadline for Assignment 2 is April 10th.`
-   
+
+## Implementation Details
+1. **RAG Pipeline**:
+- Ingestion: ingest.py loads files, splits them with RecursiveCharacterTextSplitter, embeds with all-MiniLM-L6-v2, and stores in Chroma.
+- Retrieval: fun_localGPT.py converts queries to embeddings, retrieves top chunks from Chroma.
+- Generation: Feeds chunks to Llama-2-7b-Chat-GGUF (Q4_K_M, 4-bit quantized) for responses (max 128 tokens).
+2. **Models**:
+- Embedding: all-MiniLM-L6-v2 (0.2 GB RAM).
+- LLM: Llama-2-7b-Chat-GGUF (3.5-5 GB RAM on CPU).
+- Hardware: Tested on CPU; GPU support available via device_type.
