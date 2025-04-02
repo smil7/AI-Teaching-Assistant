@@ -35,21 +35,12 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
    cd AI-Teaching-Assistant
 2. ## Install Dependencies:
 langchain
-
 langchain-community
-
 langchain-chroma
-
 transformers
-
 torch
-
 llama-cpp-python
-
 chromadb
-
 click
-
 sentence-transformers
-
 nltk
