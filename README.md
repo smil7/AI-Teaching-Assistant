@@ -33,7 +33,7 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
    ```bash
    git clone https://github.com/[yourusername]/AI-Teaching-Assistant.git
    cd AI-Teaching-Assistant
-2. ## Install Dependencies:
+2. ## Install Dependencies: (`pip install -r requirements.txt`)
 - langchain
 - langchain-community
 - langchain-chroma
@@ -44,4 +44,4 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
 - click
 - sentence-transformers
 - nltk
-`pip install -r requirements.txt`
+
