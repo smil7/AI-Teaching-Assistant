@@ -47,8 +47,26 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
 - nltk
 
 3.**Download the Model**:
-The project uses 'TheBloke/Llama-2-7b-Chat-GGUF' (Q4_K_M). It’s downloaded automatically to 'models/' on first run via 'hf_hub_download'.
+The project uses `TheBloke/Llama-2-7b-Chat-GGUF` (Q4_K_M). It’s downloaded automatically to `models/` on first run via `hf_hub_download`.
 
 5. **Prepare Course Materials**:
-Add files (e.g., PDFs, CSVs, DOCX) to 'SOURCE_DOCUMENTS/'.
+Add files (e.g., PDFs, CSVs, DOCX) to `SOURCE_DOCUMENTS/`.
 
+## Usage
+1. **Ingest Documents**:
+Process course files into the Chroma database
+`python ingest.py --device_type cpu`
+This splits files into 1000-character chunks (200-character overlap), embeds them with all-MiniLM-L6-v2, and stores them in `DB/`.
+
+
+2. **Run the AI TA**:
+Start the interactive command-line interface:
+`python fun_localGPT.py --device_type cpu --show_sources`
+
+Enter queries (e.g., "What’s in Lecture 1?") or type exit to quit.
+
+3. **Example Output**:
+`Enter a query: What’s the deadline for Assignment 2?`
+`> Question: What’s the deadline for Assignment 2?`
+`> Answer: The deadline for Assignment 2 is April 10th.`
+   
