@@ -44,3 +44,4 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
 - click
 - sentence-transformers
 - nltk
+`pip install -r requirements.txt`
