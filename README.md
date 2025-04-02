@@ -16,7 +16,7 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
 
 - **Python**: 3.8+
 - **Dependencies**: Install via `pip install -r requirements.txt` (see below for key libraries).
-- **Hardware**: CPU (tested with 8 GB RAM); GPU optional for faster inference.
+- **Hardware**: CPU (tested with 16 GB RAM); GPU optional for faster inference.
 - **Course Files**: Place documents (e.g., PDFs, CSVs) in `SOURCE_DOCUMENTS/` for ingestion.
 
 ### Key Libraries
