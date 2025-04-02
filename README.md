@@ -77,4 +77,4 @@ Start the interactive command-line interface:
 2. **Models**:
 - Embedding: all-MiniLM-L6-v2 (0.2 GB RAM).
 - LLM: Llama-2-7b-Chat-GGUF (3.5-5 GB RAM on CPU).
-- Hardware: Tested on CPU; GPU support available via device_type.
+3. **Hardware**: Tested on CPU; GPU support available via device_type.
