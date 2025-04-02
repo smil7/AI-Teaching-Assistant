@@ -33,3 +33,14 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
    ```bash
    git clone https://github.com/[yourusername]/AI-Teaching-Assistant.git
    cd AI-Teaching-Assistant
+2. ## Install Dependencies:
+langchain
+langchain-community
+langchain-chroma
+transformers
+torch
+llama-cpp-python
+chromadb
+click
+sentence-transformers
+nltk
