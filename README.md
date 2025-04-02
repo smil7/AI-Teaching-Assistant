@@ -46,3 +46,9 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
 - sentence-transformers
 - nltk
 
+3. Download the Model:
+The project uses 'TheBloke/Llama-2-7b-Chat-GGUF' (Q4_K_M). It’s downloaded automatically to 'models/' on first run via 'hf_hub_download'.
+
+5. Prepare Course Materials:
+Add files (e.g., PDFs, CSVs, DOCX) to 'SOURCE_DOCUMENTS/'.
+
