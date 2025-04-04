@@ -12,6 +12,8 @@ The AI Teaching Assistant (AI TA) automates responses to frequently asked questi
   - Generates concise, accurate responses with a quantized LLM.
   - Runs locally on CPU with minimal resource demands.
 
+**Note**: If you want to run the website, you should navigate to the `ai-teaching-assistant` directory and read the documentation there. But if you want to run the AI code only on the terminal please follow up the following instructions.
+
 ## Requirements
 
 - **Python**: 3.8+
