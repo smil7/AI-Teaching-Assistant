@@ -4,14 +4,16 @@
 /node_modules
 /.pnp
 .pnp.js
+venv/
+src/backend/SOURCE_DOCUMENTS/
+src/backend/DB/
+src/backend/__pycache__/
+/models
 
-# testing
 /coverage
 
-# production
 /build
 
-# misc
 .DS_Store
 .env.local
 .env.development.local
