@@ -5,18 +5,37 @@ function ChatbotInterface({ courseName }) {
   const [messages, setMessages] = useState([]);
   const [query, setQuery] = useState('');
 
-  const handleSendQuery = (e) => {
+  const handleSendQuery = async (e) => {
     e.preventDefault();
     if (query.trim()) {
       setMessages([...messages, { type: 'user', text: query }]);
       setQuery('');
 
-      setTimeout(() => {
+      try {
+        const response = await fetch('http://localhost:5000/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const data = await response.json();
         setMessages(prevMessages => [
           ...prevMessages,
-          { type: 'ai', text: 'This is a simulated AI response.' }
+          { type: 'ai', text: data.answer }
         ]);
-      }, 1000);
+      } catch (error) {
+        console.error('Error fetching AI response:', error);
+        setMessages(prevMessages => [
+          ...prevMessages,
+          { type: 'ai', text: 'Sorry, there was an error processing your request.' }
+        ]);
+      }
     }
   };
 

@@ -4,10 +4,48 @@ import '../styles/FormPage.css';
 function FormPage({ onSubmit }) {
   const [courseName, setCourseName] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [files, setFiles] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(courseName, instructions);
+    setIsUploading(true);
+
+    const formData = new FormData();
+    formData.append('courseName', courseName);
+    formData.append('instructions', instructions);
+    
+    // Append each file to formData
+    for (let i = 0; i < files.length; i++) {
+      formData.append('courseMaterials', files[i]);
+    }
+    console.log(formData);
+    try {
+      const response = await fetch('http://localhost:5000/api/ingest', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.message === 'the files and names are ingested') {
+          onSubmit(courseName, instructions);
+        } else {
+          alert('Failed to ingest data');
+        }
+      } else {
+        alert('Failed to send data to the server');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('An error occurred while sending data');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    setFiles(Array.from(e.target.files));
   };
 
   return (
@@ -37,9 +75,22 @@ function FormPage({ onSubmit }) {
         </div>
         <div className="form-group">
           <label htmlFor="courseMaterials">Upload Course Materials (Max 500MB):</label>
-          <input type="file" id="courseMaterials" name="courseMaterials" accept=".pdf,.doc,.docx,.txt" />
+          <input
+            type="file"
+            id="courseMaterials"
+            name="courseMaterials"
+            accept=".pdf,.doc,.docx,.txt"
+            onChange={handleFileChange}
+            multiple
+          />
         </div>
-        <button type="submit" className="submit-button">Submit</button>
+        <button 
+          type="submit" 
+          className="submit-button"
+          disabled={isUploading}
+        >
+          {isUploading ? 'Uploading...' : 'Submit'}
+        </button>
       </form>
     </div>
   );
